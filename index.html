@@ -63,6 +63,12 @@
         .select-wrapper { position: relative; width: 100%; }
         .select-wrapper::after { content: '▼'; font-size: 0.8rem; color: #999; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 
+        /* 商品下拉按钮：点击只弹列表不弹键盘 */
+        .select-wrapper.has-dd::after { display: none; }
+        .has-dd input { padding-right: 46px; }
+        .dd-arrow { position: absolute; right: 0; top: 1px; bottom: 1px; width: 44px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.75rem; cursor: pointer; z-index: 5; }
+        .dd-arrow:active { color: var(--primary-color); }
+
         .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #eee; border-radius: var(--radius); z-index: 10; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 4px; }
         .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; display: flex; justify-content: space-between; align-items: center; }
         .suggestion-item:hover { background-color: #f0f0f0; }
@@ -231,8 +237,9 @@
                 <form id="formIn">
                     <div class="form-group">
                         <label>商品名称 (点击选择)</label>
-                        <div class="input-wrapper select-wrapper">
+                        <div class="input-wrapper select-wrapper has-dd">
                             <input type="text" id="inName" placeholder="选择或输入新商品..." autocomplete="off" onfocus="showSuggestions('in')">
+                            <span class="dd-arrow" onclick="ddTap('in')">▼</span>
                             <div id="inSuggestions" class="suggestions"></div>
                         </div>
                     </div>
@@ -281,8 +288,9 @@
                 <form id="formOut">
                     <div class="form-group">
                         <label>商品名称 (点击选择)</label>
-                        <div class="input-wrapper select-wrapper">
+                        <div class="input-wrapper select-wrapper has-dd">
                             <input type="text" id="outName" placeholder="选择或输入商品..." autocomplete="off" onfocus="showSuggestions('out')">
+                            <span class="dd-arrow" onclick="ddTap('out')">▼</span>
                             <div id="outSuggestions" class="suggestions"></div>
                         </div>
                     </div>
@@ -333,8 +341,9 @@
                 <form id="formReturn">
                     <div class="form-group">
                         <label>商品名称</label>
-                        <div class="input-wrapper select-wrapper">
+                        <div class="input-wrapper select-wrapper has-dd">
                             <input type="text" id="retName" placeholder="选择退货商品..." autocomplete="off" onfocus="showSuggestions('return')">
+                            <span class="dd-arrow" onclick="ddTap('return')">▼</span>
                             <div id="retSuggestions" class="suggestions"></div>
                         </div>
                     </div>
@@ -1536,6 +1545,17 @@
             } else {
                 document.getElementById('calcResult').innerText = "请输入价格进行计算";
             }
+        }
+
+        // 点下拉三角形：只弹商品列表，不聚焦输入框（不弹键盘）
+        function ddTap(type) {
+            const inputId = type === 'in' ? 'inName' : (type === 'out' ? 'outName' : 'retName');
+            const boxId = type === 'in' ? 'inSuggestions' : (type === 'out' ? 'outSuggestions' : 'retSuggestions');
+            const input = document.getElementById(inputId);
+            const box = document.getElementById(boxId);
+            if (box.style.display === 'block') { box.style.display = 'none'; return; }
+            showSuggestions(type);
+            if (document.activeElement === input) input.blur();
         }
 
         function showSuggestions(type) {
