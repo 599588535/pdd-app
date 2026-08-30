@@ -69,6 +69,10 @@
         .dd-arrow { position: absolute; right: 0; top: 1px; bottom: 1px; width: 44px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.75rem; cursor: pointer; z-index: 5; }
         .dd-arrow:active { color: var(--primary-color); }
 
+        .suggestion-empty { padding: 12px; text-align: center; color: #999; font-size: 0.85rem; }
+        .stock-del { display: inline-block; margin-top: 5px; font-size: 0.72rem; color: var(--danger); background: rgba(255,23,68,0.08); border-radius: 4px; padding: 2px 8px; text-decoration: none; cursor: pointer; }
+        .stock-del:hover { background: rgba(255,23,68,0.15); }
+
         .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #eee; border-radius: var(--radius); z-index: 10; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 4px; }
         .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; display: flex; justify-content: space-between; align-items: center; }
         .suggestion-item:hover { background-color: #f0f0f0; }
@@ -541,6 +545,7 @@
         <div id="page-manage" class="page">
             <div class="card span-2">
                 <div class="card-header">📦 库存总览</div>
+                <div class="sync-status" style="margin: 0 0 12px; text-align: left;">💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留</div>
                 <div id="stockList" class="stock-list"></div>
             </div>
 
@@ -775,6 +780,10 @@
             renderAllLists();
             
             document.getElementById('filterType').addEventListener('change', renderHomeList);
+            document.getElementById('stockList').addEventListener('click', function(e) {
+                const btn = e.target.closest('.stock-del');
+                if (btn) deleteProduct(btn.getAttribute('data-key'));
+            });
             document.addEventListener('click', function(e) {
                 if (!e.target.closest('.input-wrapper')) {
                     document.querySelectorAll('.suggestions').forEach(el => el.style.display = 'none');
@@ -1119,6 +1128,19 @@
             addRecord('out', { name, price, cost: costForRecord, qty, profit, fee, saleType, splitQty: saleType === 'split' ? splitQty : 0 });
         });
 
+        // 删除商品：清除库存，保留历史销售记录
+        function deleteProduct(name) {
+            const key = String(name || '').toLowerCase();
+            const p = appData.products[key];
+            if (!p) return;
+            if (!confirm('确定删除商品「' + p.name + '」吗？\n\n· 将清除该商品库存（列表移除、无法再出单）\n· 之前的销售/入库历史记录会保留')) return;
+            delete appData.products[key];
+            appData.isSeed = false;
+            saveData();
+            renderAllLists();
+            showToast('商品已删除（历史记录保留）');
+        }
+
         function deleteRecord(id) {
             if(!confirm('确定要删除这条记录吗？')) return;
             const index = appData.records.findIndex(r => String(r.id) === String(id));
@@ -1442,6 +1464,7 @@
                     <div class="stock-item-value">
                         <div class="total-val">¥${totalVal.toFixed(2)}</div>
                         <div class="avg-cost">均价: ¥${p.cost.toFixed(2)}/件</div>
+                        <a href="javascript:void(0)" class="stock-del" data-key="${esc(p.name)}">删除</a>
                     </div>
                 </div>`;
             });
@@ -1637,8 +1660,18 @@
             const input = document.getElementById(inputId);
             const box = document.getElementById(boxId);
             
-            const keys = Object.keys(appData.products).sort();
-            if (keys.length === 0) { box.style.display = 'none'; return; }
+            let keys = Object.keys(appData.products).sort();
+            // 出单只能选有库存的商品
+            if (type === 'out') keys = keys.filter(k => appData.products[k].stock > 0.0001);
+            if (keys.length === 0) {
+                if (type === 'out') {
+                    box.innerHTML = '<div class="suggestion-empty">暂无有库存的商品，请先入库</div>';
+                    box.style.display = 'block';
+                } else {
+                    box.style.display = 'none';
+                }
+                return;
+            }
 
             box.innerHTML = '';
             keys.forEach(k => {
@@ -1663,7 +1696,8 @@
                 const val = this.value.toLowerCase();
                 const box = document.getElementById(boxId);
                 if (!val) { showSuggestions(type); return; }
-                const matches = Object.keys(appData.products).filter(k => k.includes(val));
+                let matches = Object.keys(appData.products).filter(k => k.includes(val));
+                if (type === 'out') matches = matches.filter(k => appData.products[k].stock > 0.0001);
                 box.innerHTML = '';
                 if (matches.length > 0) {
                     matches.forEach(k => {
@@ -1678,6 +1712,9 @@
                         };
                         box.appendChild(div);
                     });
+                    box.style.display = 'block';
+                } else if (type === 'out') {
+                    box.innerHTML = '<div class="suggestion-empty">没有匹配的有库存商品</div>';
                     box.style.display = 'block';
                 } else { box.style.display = 'none'; }
             });
