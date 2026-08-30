@@ -544,7 +544,13 @@
 
         <div id="page-manage" class="page">
             <div class="card span-2">
-                <div class="card-header">📦 库存总览</div>
+                <div class="card-header">📦 库存总览
+                    <select id="stockSortSel" onchange="setStockSort(this.value)" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #eee; width: auto; font-size: 0.8rem;">
+                        <option value="value">按库存金额</option>
+                        <option value="qty">按库存数量</option>
+                        <option value="name">按名称</option>
+                    </select>
+                </div>
                 <div class="sync-status" style="margin: 0 0 12px; text-align: left;">💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留</div>
                 <div id="stockList" class="stock-list"></div>
             </div>
@@ -744,6 +750,7 @@
             loadFeeRate();
             document.getElementById('shipDate').value = todayStr();
             document.getElementById('expenseDate').value = todayStr();
+            document.getElementById('stockSortSel').value = getStockSort();
 
             if (appData.records.length === 0 && !localStorage.getItem('pddSeeded')) {
                 initialRecords.forEach(record => {
@@ -1440,9 +1447,26 @@
             renderStockList();
         }
 
+        function getStockSort() {
+            return localStorage.getItem('pddStockSort') || 'value';
+        }
+
+        function setStockSort(v) {
+            localStorage.setItem('pddStockSort', v);
+            renderStockList();
+        }
+
         function renderStockList() {
             const container = document.getElementById('stockList');
-            const keys = Object.keys(appData.products).sort();
+            const keys = Object.keys(appData.products);
+            const sortMode = getStockSort();
+            if (sortMode === 'qty') {
+                keys.sort((a, b) => appData.products[b].stock - appData.products[a].stock);
+            } else if (sortMode === 'value') {
+                keys.sort((a, b) => (appData.products[b].stock * appData.products[b].cost) - (appData.products[a].stock * appData.products[a].cost));
+            } else {
+                keys.sort();
+            }
             if (keys.length === 0) {
                 container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无商品库存</div>';
                 return;
