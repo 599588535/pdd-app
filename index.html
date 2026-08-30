@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#e02e24">
+    <title>拼多多商家经营助手 Pro</title>
+    <style>
+        :root {
+            --primary-color: #e02e24;
+            --bg-color: #f4f4f4;
+            --card-bg: #ffffff;
+            --text-main: #333333;
+            --text-sub: #666666;
+            --border-color: #eeeeee;
+            --success: #00c853;
+            --warning: #ff9800;
+            --danger: #ff1744;
+            --info: #2196f3;
+            --purple: #9c27b0;
+            --radius: 8px;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); color: var(--text-main); padding-bottom: 80px; }
+
+        .dashboard { background: linear-gradient(135deg, #ff5252, #e02e24); color: white; padding: 20px 15px; border-radius: 0 0 20px 20px; box-shadow: 0 4px 12px rgba(224, 46, 36, 0.3); }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .top-bar h1 { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
+        
+        .date-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+        .date-select-group { display: flex; align-items: center; background: rgba(255,255,255,0.2); border-radius: 20px; padding: 2px 8px; }
+        
+        select { background: transparent; color: white; border: none; font-size: 16px; outline: none; appearance: none; -webkit-appearance: none; padding-right: 15px; }
+        select option { color: #333; }
+        
+        input[type="date"] { background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; padding: 4px 8px; font-size: 16px; outline: none; color-scheme: light; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .stat-item { background: rgba(255,255,255,0.15); backdrop-filter: blur(5px); padding: 12px 8px; border-radius: var(--radius); text-align: center; }
+        .stat-value { font-size: 1.2rem; font-weight: bold; display: block; margin-top: 4px; }
+        .stat-label { font-size: 0.75rem; opacity: 0.9; }
+        .stat-sub { font-size: 0.7rem; opacity: 0.8; margin-top: 2px; display: block; }
+        .full-width { grid-column: span 2; background: rgba(255,255,255,0.25); }
+
+        .page { display: none; padding: 15px; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .card { background: var(--card-bg); border-radius: var(--radius); padding: 20px; margin-bottom: 15px; box-shadow: var(--shadow); }
+        .card-header { font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; border-left: 4px solid var(--primary-color); padding-left: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; color: var(--text-sub); margin-bottom: 5px; font-size: 0.9rem; }
+        
+        input[type="text"], input[type="number"], input[type="password"], .page select {
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: var(--radius); font-size: 16px; transition: border-color 0.2s; background: white; appearance: none; -webkit-appearance: none; 
+        }
+        input:focus, .page select:focus { border-color: var(--primary-color); }
+        
+        .select-wrapper { position: relative; width: 100%; }
+        .select-wrapper::after { content: '▼'; font-size: 0.8rem; color: #999; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+
+        .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #eee; border-radius: var(--radius); z-index: 10; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 4px; }
+        .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; display: flex; justify-content: space-between; align-items: center; }
+        .suggestion-item:hover { background-color: #f0f0f0; }
+
+        .input-mode-switch { display: flex; margin-bottom: 15px; background: #f5f5f5; border-radius: var(--radius); padding: 2px; }
+        .mode-btn { flex: 1; padding: 8px; text-align: center; font-size: 0.9rem; cursor: pointer; border-radius: 6px; color: #666; transition: all 0.2s; }
+        .mode-btn.active { background: white; color: var(--primary-color); font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+        .btn { width: 100%; padding: 12px; border: none; border-radius: var(--radius); font-size: 1rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-warning { background-color: var(--warning); color: white; }
+        .btn-outline { background-color: transparent; border: 1px solid #ddd; color: var(--text-sub); margin-top: 10px; }
+        .btn:active { opacity: 0.8; }
+        .btn-sm { padding: 6px 12px; font-size: 0.85rem; width: auto; display: inline-block; }
+
+        .stock-list { margin-top: 10px; }
+        .stock-item { background: #fcfcfc; border: 1px solid #eee; border-radius: var(--radius); padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .stock-item-info h4 { margin: 0 0 5px 0; font-size: 1rem; }
+        .stock-item-info p { margin: 0; font-size: 0.8rem; color: #666; }
+        .stock-item-value { text-align: right; }
+        .stock-item-value .total-val { font-size: 1.1rem; font-weight: bold; color: var(--primary-color); }
+        .stock-item-value .avg-cost { font-size: 0.8rem; color: #999; }
+        
+        .calc-result { background: #f0f8ff; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; text-align: center; color: var(--info); font-weight: bold; }
+
+        .record-list { margin-top: 20px; }
+        .record-item { background: white; padding: 15px; border-radius: var(--radius); margin-bottom: 10px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; }
+        .record-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+        .type-in::before { background-color: var(--success); }
+        .type-out::before { background-color: var(--primary-color); }
+        .type-ship::before { background-color: var(--info); }
+        .type-return::before { background-color: var(--warning); }
+        .type-expense::before { background-color: var(--purple); }
+
+        .record-info h4 { margin: 0 0 4px 0; font-size: 1rem; }
+        .record-info p { margin: 0; font-size: 0.85rem; color: var(--text-sub); }
+        .record-meta { text-align: right; }
+        .money { font-weight: bold; color: var(--text-main); }
+        .money.profit { color: var(--success); }
+        .money.loss { color: var(--danger); }
+        .money.expense { color: var(--info); }
+        
+        .record-actions { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+        .action-link { font-size: 0.85rem; color: #666; text-decoration: none; padding: 4px 8px; background: #f5f5f5; border-radius: 4px; }
+        .action-link.delete { color: var(--danger); background: rgba(255, 23, 68, 0.1); }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: white; border-top: 1px solid #eee; display: flex; justify-content: space-around; padding: 8px 0; z-index: 100; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+        .nav-item { text-align: center; color: #999; font-size: 0.66rem; flex: 1; cursor: pointer; }
+        .nav-item.active { color: var(--primary-color); }
+        .nav-icon { display: block; font-size: 1.25rem; margin-bottom: 2px; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; display: none; align-items: center; justify-content: center; }
+        .modal { background: white; width: 90%; max-width: 400px; border-radius: var(--radius); padding: 20px; animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .modal h3 { margin-top: 0; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; font-size: 0.9rem; z-index: 300; display: none; }
+        .sync-status { font-size: 0.8rem; color: #666; margin-top: 10px; text-align: center; }
+
+        /* ===== 统计分析 ===== */
+        .mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 5px; }
+        .mini-stat { background: #fafafa; border: 1px solid #f0f0f0; border-radius: var(--radius); padding: 10px 2px; text-align: center; }
+        .mini-stat .v { display: block; font-size: 1.05rem; font-weight: bold; color: var(--text-main); }
+        .mini-stat .l { font-size: 0.68rem; color: #999; }
+
+        .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+        .bar-label { width: 88px; flex-shrink: 0; font-size: 0.78rem; color: #555; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: right; }
+        .bar-track { flex: 1; height: 14px; background: #f2f2f2; border-radius: 7px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 7px; background: linear-gradient(90deg, #ff8a80, var(--primary-color)); min-width: 2px; }
+        .bar-fill.green { background: linear-gradient(90deg, #69f0ae, var(--success)); }
+        .bar-fill.blue { background: linear-gradient(90deg, #64b5f6, var(--info)); }
+        .bar-fill.purple { background: linear-gradient(90deg, #ce93d8, var(--purple)); }
+        .bar-value { width: 96px; flex-shrink: 0; font-size: 0.7rem; color: #666; }
+
+        #trendCanvas { width: 100%; height: 180px; display: block; }
+        .trend-summary { text-align: center; font-size: 0.78rem; color: #888; margin-top: 8px; }
+
+        .insight-item { background: #fffde7; border-left: 3px solid var(--warning); border-radius: 4px; padding: 8px 10px; font-size: 0.8rem; color: #6d4c41; margin-bottom: 8px; line-height: 1.5; }
+
+        .stock-tag { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 8px; margin-left: 5px; vertical-align: 1px; }
+        .tag-danger { background: rgba(255,23,68,0.1); color: var(--danger); }
+        .tag-warn { background: rgba(255,152,0,0.12); color: #e65100; }
+    </style>
+</head>
+<body>
+
+    <div id="toast" class="toast">操作成功</div>
+
+    <div class="dashboard">
+        <div class="top-bar">
+            <h1>📊 经营概览</h1>
+        </div>
+        
+        <div class="date-controls">
+            <div class="date-select-group">
+                <select id="dateFilterType" onchange="toggleDateInputs()">
+                    <option value="today">今日</option>
+                    <option value="week">本周</option>
+                    <option value="month">本月</option>
+                    <option value="all">全部</option>
+                    <option value="custom">自定义</option>
+                </select>
+            </div>
+            <div id="customDateInputs" style="display: none; gap: 5px;">
+                <input type="date" id="dateStart" onchange="updateDashboard()">
+                <span style="opacity:0.6;">-</span>
+                <input type="date" id="dateEnd" onchange="updateDashboard()">
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-item full-width">
+                <span class="stat-label">预估毛利 (含手续费/费用)</span>
+                <span class="stat-value" id="totalProfit">¥0.00</span>
+                <span class="stat-sub" id="profitRate">利润率: 0%</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">销售额(实收)</span>
+                <span class="stat-value" id="totalSales">¥0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">总成本(货+运)</span>
+                <span class="stat-value" id="totalCost">¥0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">库存总价值</span>
+                <span class="stat-value" id="stockCost">¥0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">运费支出</span>
+                <span class="stat-value" id="totalShipping">¥0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">其他支出</span>
+                <span class="stat-value" id="totalExpense">¥0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">手续费</span>
+                <span class="stat-value" id="totalFee">¥0</span>
+            </div>
+        </div>
+    </div>
+
+    <main style="margin-top: 15px;">
+        <div id="page-home" class="page active">
+            <div class="card">
+                <div class="card-header">
+                    <span>最近记录</span>
+                    <select id="filterType" style="padding: 4px; border-radius: 4px; border: 1px solid #ddd; width: auto;">
+                        <option value="all">全部</option>
+                        <option value="out">出单</option>
+                        <option value="return">退货</option>
+                        <option value="in">入库</option>
+                        <option value="ship">运费</option>
+                        <option value="expense">其他支出</option>
+                    </select>
+                </div>
+                <div id="recordList" class="record-list"></div>
+            </div>
+        </div>
+
+        <div id="page-in" class="page">
+            <div class="card">
+                <div class="card-header">📦 商品入库</div>
+                <form id="formIn">
+                    <div class="form-group">
+                        <label>商品名称 (点击选择)</label>
+                        <div class="input-wrapper select-wrapper">
+                            <input type="text" id="inName" placeholder="选择或输入新商品..." autocomplete="off" onfocus="showSuggestions('in')">
+                            <div id="inSuggestions" class="suggestions"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-mode-switch">
+                        <div class="mode-btn active" id="inModeUnit" onclick="switchInMode('unit')">按单价录入</div>
+                        <div class="mode-btn" id="inModeTotal" onclick="switchInMode('total')">按总价录入</div>
+                    </div>
+
+                    <div id="inUnitMode">
+                        <div class="form-group">
+                            <label>进货单价 (元)</label>
+                            <input type="number" id="inCost" placeholder="0.00" step="0.01" oninput="calcInTotal()">
+                        </div>
+                    </div>
+
+                    <div id="inTotalMode" style="display:none;">
+                        <div class="form-group">
+                            <label>进货总价 (元)</label>
+                            <input type="number" id="inTotalCost" placeholder="输入整单总价" step="0.01" oninput="calcInUnit()">
+                            <small style="color:#999; font-size:0.8rem;">*输入总价后，系统自动计算平均单价</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>入库数量</label>
+                        <input type="number" id="inQty" placeholder="0" oninput="calcInUnit()">
+                    </div>
+                    
+                    <div style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 15px; background: #e8f5e9; padding: 8px; border-radius: 4px;">
+                        计算单价: ¥<span id="displayCost">0.00</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">确认入库</button>
+                </form>
+            </div>
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--success);">入库历史</div>
+                <div id="listIn" class="record-list"></div>
+            </div>
+        </div>
+
+        <div id="page-out" class="page">
+            <div class="card">
+                <div class="card-header">🛒 商品出单</div>
+                <form id="formOut">
+                    <div class="form-group">
+                        <label>商品名称 (点击选择)</label>
+                        <div class="input-wrapper select-wrapper">
+                            <input type="text" id="outName" placeholder="选择或输入商品..." autocomplete="off" onfocus="showSuggestions('out')">
+                            <div id="outSuggestions" class="suggestions"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>销售方式</label>
+                        <select id="outSaleType" onchange="toggleSaleType()">
+                            <option value="whole">整套销售</option>
+                            <option value="split">拆分销售</option>
+                        </select>
+                    </div>
+                    
+                    <div id="splitSaleOptions" style="display: none;">
+                        <div class="form-group">
+                            <label>单套拆分小件数量</label>
+                            <input type="number" id="outSplitQty" placeholder="例如：4" min="1">
+                            <small style="color:#999; font-size:0.8rem;">*一个完整套装包含多少个小件</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>整套成本均价 (当前库存)</label>
+                        <input type="number" id="outCost" placeholder="0.00" step="0.01" readonly style="background: #f9f9f9; color:#666;">
+                        <small style="color:#999; font-size:0.8rem; display:block; margin-top:5px;">*拆分销售时，系统会自动用此价格除以上方的数量得出单件成本</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>卖出单价 (元)</label>
+                        <input type="number" id="outPrice" placeholder="0.00" step="0.01">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>卖出数量</label>
+                        <input type="number" id="outQty" placeholder="0">
+                    </div>
+                    <button type="submit" class="btn btn-primary">确认出单</button>
+                </form>
+            </div>
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--primary-color);">出单历史</div>
+                <div id="listOut" class="record-list"></div>
+            </div>
+        </div>
+
+        <div id="page-return" class="page">
+            <div class="card">
+                <div class="card-header">🔄 退款/退货处理</div>
+                <form id="formReturn">
+                    <div class="form-group">
+                        <label>商品名称</label>
+                        <div class="input-wrapper select-wrapper">
+                            <input type="text" id="retName" placeholder="选择退货商品..." autocomplete="off" onfocus="showSuggestions('return')">
+                            <div id="retSuggestions" class="suggestions"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>退货数量</label>
+                        <input type="number" id="retQty" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>退货金额</label>
+                        <input type="number" id="retPrice" placeholder="0.00" step="0.01">
+                    </div>
+                    <button type="submit" class="btn btn-warning">确认退货</button>
+                </form>
+            </div>
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--warning);">退货历史</div>
+                <div id="listReturn" class="record-list"></div>
+            </div>
+        </div>
+
+        <div id="page-ship" class="page">
+            <div class="card">
+                <div class="card-header">💰 费用记录 (运费 / 报销)</div>
+                <div class="input-mode-switch">
+                    <div class="mode-btn active" id="feeModeShip" onclick="switchFeeMode('ship')">🚚 运费</div>
+                    <div class="mode-btn" id="feeModeExpense" onclick="switchFeeMode('expense')">🧾 报销/其他支出</div>
+                </div>
+
+                <form id="formShip">
+                    <div class="form-group">
+                        <label>运费金额 (元)</label>
+                        <input type="number" id="shipAmount" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>运费日期</label>
+                        <input type="date" id="shipDate">
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <input type="text" id="shipNote" placeholder="例如：发往上海，顺丰">
+                    </div>
+                    <button type="submit" class="btn" style="background-color: var(--info); color: white;">记录运费</button>
+                </form>
+
+                <form id="formExpense" style="display: none;">
+                    <div class="form-group">
+                        <label>支出分类</label>
+                        <div class="select-wrapper">
+                            <select id="expenseCat">
+                                <option value="包装材料">包装材料</option>
+                                <option value="推广费用">推广费用</option>
+                                <option value="设备工具">设备工具</option>
+                                <option value="平台服务">平台服务</option>
+                                <option value="采买样品">采买样品</option>
+                                <option value="日常报销">日常报销</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>支出金额 (元)</label>
+                        <input type="number" id="expenseAmount" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>支出日期</label>
+                        <input type="date" id="expenseDate">
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <input type="text" id="expenseNote" placeholder="例如：气泡膜10卷，微信付款">
+                    </div>
+                    <button type="submit" class="btn" style="background-color: var(--purple); color: white;">记录支出</button>
+                </form>
+            </div>
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--info);">费用历史</div>
+                <div id="listFee" class="record-list"></div>
+            </div>
+        </div>
+
+        <div id="page-stats" class="page">
+            <div class="card">
+                <div class="card-header">📈 数据统计分析</div>
+                <div class="form-group">
+                    <label>统计时段</label>
+                    <div class="select-wrapper">
+                        <select id="statsRange" onchange="renderStats()">
+                            <option value="7">近7天</option>
+                            <option value="30" selected>近30天</option>
+                            <option value="month">本月</option>
+                            <option value="all">全部</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="miniStats" class="mini-grid"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--warning);">💡 经营洞察</div>
+                <div id="insightBox"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--success);">利润趋势</div>
+                <canvas id="trendCanvas"></canvas>
+                <div class="trend-summary" id="trendSummary"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--primary-color);">商品贡献排行</div>
+                <div id="rankBox"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--purple);">支出构成</div>
+                <div id="expenseBox"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--info);">📦 库存构成</div>
+                <div id="stockRankBox"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="font-size: 1rem;">📤 报表导出</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="exportCSV()">📊 明细CSV</button>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="exportSummaryCSV()">🧾 汇总CSV</button>
+                </div>
+                <small style="color:#999; font-size:0.75rem; display:block; margin-top:8px;">*CSV可直接用Excel/WPS打开，支出明细可用于记账报销</small>
+            </div>
+        </div>
+
+        <div id="page-manage" class="page">
+            <div class="card">
+                <div class="card-header">📦 库存总览</div>
+                <div id="stockList" class="stock-list"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" style="border-left-color: var(--purple);">⚙️ 参数设置</div>
+                <div class="form-group">
+                    <label>平台手续费率 (%)</label>
+                    <input type="number" id="feeRateInput" step="0.01" placeholder="0.6">
+                    <small style="color:#999; font-size:0.75rem; display:block; margin-top:4px;">*修改后对新记录生效，历史记录保留原始数据</small>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="saveFeeRate()">💾 保存设置</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">🧮 利润计算器</div>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">输入成本和售价，自动计算扣除手续费后的毛利</p>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; color:#666;">成本</label>
+                        <input type="number" id="calcCost" placeholder="成本价" style="width:100%;" oninput="runCalculator()">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; color:#666;">售价</label>
+                        <input type="number" id="calcPrice" placeholder="售价" style="width:100%;" oninput="runCalculator()">
+                    </div>
+                </div>
+                <div class="calc-result" id="calcResult">请输入价格进行计算</div>
+            </div>
+
+            <!-- GitHub 云端同步模块 -->
+            <div class="card">
+                <div class="card-header" style="border-left-color: var(--info);">☁️ GitHub 云端同步</div>
+                <div class="form-group">
+                    <label>GitHub 用户名</label>
+                    <input type="text" id="ghUser" placeholder="您的 GitHub 用户名">
+                </div>
+                <div class="form-group">
+                    <label>仓库名称</label>
+                    <input type="text" id="ghRepo" placeholder="例如：pdd-data">
+                </div>
+                <div class="form-group">
+                    <label>Personal Access Token</label>
+                    <input type="password" id="ghToken" placeholder="ghp_...">
+                </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="saveGithubConfig()">💾 保存配置</button>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="pushToGithub()">⬆️ 推送到云端</button>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="pullFromGithub()">⬇️ 从云端拉取</button>
+                </div>
+                <div class="sync-status" id="syncStatus">未同步</div>
+                <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;">*配置并保存后自动开启：修改约3秒后自动上传，打开页面自动拉取云端较新数据<br>*建议数据仓库存<b>私有</b>仓库（数据不公开），程序文件可放公开仓库生成网址供手机访问</small>
+            </div>
+
+            <div class="card">
+                <div class="card-header">🗃️ 本地备份</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-outline btn-sm" onclick="exportData()">📤 备份JSON</button>
+                    <button class="btn btn-outline btn-sm" onclick="triggerImport()">📥 导入恢复</button>
+                    <button class="btn btn-outline btn-sm" onclick="exportCSV()">📊 导出CSV</button>
+                    <button class="btn btn-outline btn-sm" style="color: var(--danger); border-color: rgba(255,23,68,0.4);" onclick="clearAllData()">🗑️ 清空数据</button>
+                </div>
+                <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(this)">
+            </div>
+        </div>
+    </main>
+
+    <div id="editModal" class="modal-overlay">
+        <div class="modal">
+            <h3>修改记录</h3>
+            <form id="formEdit">
+                <input type="hidden" id="editId">
+                <input type="hidden" id="editType">
+                
+                <div class="form-group">
+                    <label>名称/备注</label>
+                    <input type="text" id="editName">
+                </div>
+                
+                <div id="editPriceGroup" class="form-group">
+                    <label>价格</label>
+                    <input type="number" id="editPrice" step="0.01">
+                </div>
+
+                <div id="editCostGroup" class="form-group">
+                    <label>成本</label>
+                    <input type="number" id="editCost" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label id="editQtyLabel">数量</label>
+                    <input type="number" id="editQty">
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary btn-sm">保存修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchTab('home', this)">
+            <span class="nav-icon">📊</span>
+            首页
+        </div>
+        <div class="nav-item" onclick="switchTab('in', this)">
+            <span class="nav-icon">📦</span>
+            入库
+        </div>
+        <div class="nav-item" onclick="switchTab('out', this)">
+            <span class="nav-icon">🛒</span>
+            出单
+        </div>
+        <div class="nav-item" onclick="switchTab('return', this)">
+            <span class="nav-icon">🔄</span>
+            退货
+        </div>
+        <div class="nav-item" onclick="switchTab('ship', this)">
+            <span class="nav-icon">💰</span>
+            费用
+        </div>
+        <div class="nav-item" onclick="switchTab('stats', this)">
+            <span class="nav-icon">📈</span>
+            统计
+        </div>
+        <div class="nav-item" onclick="switchTab('manage', this)">
+            <span class="nav-icon">⚙️</span>
+            管理
+        </div>
+    </nav>
+
+    <script>
+        let appData = {
+            products: {},
+            records: []
+        };
+
+        let ghConfig = {
+            user: '',
+            repo: '',
+            token: ''
+        };
+
+        const DEFAULT_FEE_RATE = 0.006;
+        const FILE_NAME = 'pdd_biz_data.json';
+
+        function getFeeRate() {
+            const v = parseFloat(localStorage.getItem('pddFeeRate'));
+            return (isNaN(v) || v < 0) ? DEFAULT_FEE_RATE : v / 100;
+        }
+
+        function todayStr() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        function genId() {
+            return Date.now() + '' + Math.floor(Math.random() * 1000);
+        }
+
+        // 初始化数据（仅首次使用时载入示例）
+        const initialRecords = [
+            { name: "box酷洛米", qty: 9, cost: 145.41, timestamp: "2024-08-12T12:37:00Z" },
+            { name: "动感超人大体", qty: 11, cost: 174.85, timestamp: "2024-08-12T12:37:00Z" },
+            { name: "bob国王大体", qty: 3, cost: 446.00, timestamp: "2024-08-12T12:31:00Z" },
+            { name: "box酷洛米", qty: 10, cost: 146.35, timestamp: "2024-08-12T12:31:00Z" },
+            { name: "bob国王大体", qty: 3, cost: 446.00, timestamp: "2024-08-12T12:30:00Z" },
+            { name: "bob国王大体", qty: 3, cost: 446.00, timestamp: "2024-08-12T12:29:00Z" },
+            { name: "box酷洛米", qty: 10, cost: 146.35, timestamp: "2024-08-12T12:28:00Z" },
+            { name: "农场守望者", qty: 10, cost: 170.72, timestamp: "2024-08-12T12:27:00Z" },
+            { name: "云朵灯", qty: 4, cost: 98.80, timestamp: "2024-08-12T12:27:00Z" },
+            { name: "蜡笔小新玩具箱大作战", qty: 7, cost: 215.90, timestamp: "2024-08-12T12:26:00Z" },
+            { name: "box酷洛米", qty: 1, cost: 141.38, timestamp: "2024-08-12T12:25:00Z" }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            loadGithubConfig();
+            loadFeeRate();
+            document.getElementById('shipDate').value = todayStr();
+            document.getElementById('expenseDate').value = todayStr();
+
+            if (appData.records.length === 0 && !localStorage.getItem('pddSeeded')) {
+                initialRecords.forEach(record => {
+                    const key = record.name.toLowerCase();
+                    if (!appData.products[key]) {
+                        appData.products[key] = { name: record.name, cost: record.cost, stock: 0 };
+                    }
+                    
+                    const p = appData.products[key];
+                    const oldTotalCost = p.stock * p.cost;
+                    const newTotalCost = record.qty * record.cost;
+                    const newStock = p.stock + record.qty;
+                    
+                    if (newStock > 0) {
+                        p.cost = (oldTotalCost + newTotalCost) / newStock;
+                    }
+                    p.stock = newStock;
+                    
+                    appData.records.push({
+                        id: genId(),
+                        type: 'in',
+                        timestamp: record.timestamp,
+                        name: record.name,
+                        cost: record.cost,
+                        qty: record.qty
+                    });
+                });
+                localStorage.setItem('pddSeeded', '1');
+                appData.isSeed = true;
+                saveData();
+            }
+            
+            updateDashboard();
+            renderAllLists();
+            
+            document.getElementById('filterType').addEventListener('change', renderHomeList);
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.input-wrapper')) {
+                    document.querySelectorAll('.suggestions').forEach(el => el.style.display = 'none');
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                const p = document.getElementById('page-stats');
+                if (p && p.classList.contains('active')) renderStats();
+            });
+
+            initialSync();
+            window.addEventListener('online', () => initialSync());
+            window.addEventListener('pagehide', flushSyncOnExit);
+        });
+
+        function saveData() {
+            appData.updatedAt = Date.now();
+            if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
+            localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
+            updateDashboard();
+            renderStockList();
+            const statsPage = document.getElementById('page-stats');
+            if (statsPage && statsPage.classList.contains('active')) renderStats();
+            scheduleAutoSync();
+        }
+
+        function loadData() {
+            try {
+                const saved = localStorage.getItem('pddBizDataPro');
+                if (saved) appData = JSON.parse(saved);
+            } catch (e) {
+                console.warn('本地数据解析失败，已重置', e);
+                appData = { products: {}, records: [] };
+            }
+            if (!appData.products) appData.products = {};
+            if (!appData.records) appData.records = [];
+            if (!appData.updatedAt) appData.updatedAt = 1;
+        }
+
+        function saveFeeRate() {
+            const v = parseFloat(document.getElementById('feeRateInput').value);
+            if (isNaN(v) || v < 0 || v > 100) { alert('请输入 0~100 之间的数字'); return; }
+            localStorage.setItem('pddFeeRate', String(v));
+            showToast('设置已保存');
+            runCalculator();
+        }
+
+        function loadFeeRate() {
+            const v = parseFloat(localStorage.getItem('pddFeeRate'));
+            document.getElementById('feeRateInput').value = isNaN(v) ? '0.6' : String(v);
+        }
+
+        function saveGithubConfig() {
+            ghConfig.user = document.getElementById('ghUser').value.trim();
+            ghConfig.repo = document.getElementById('ghRepo').value.trim();
+            ghConfig.token = document.getElementById('ghToken').value.trim();
+            localStorage.setItem('ghConfig', JSON.stringify(ghConfig));
+            showToast('配置已保存');
+            if (syncConfigured()) initialSync();
+        }
+
+        function loadGithubConfig() {
+            const saved = localStorage.getItem('ghConfig');
+            if (saved) {
+                ghConfig = JSON.parse(saved);
+                document.getElementById('ghUser').value = ghConfig.user;
+                document.getElementById('ghRepo').value = ghConfig.repo;
+                document.getElementById('ghToken').value = ghConfig.token;
+            }
+        }
+
+        function utf8ToBase64(str) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
+        function base64ToUtf8(b64) {
+            return decodeURIComponent(escape(atob(b64)));
+        }
+
+        /* ==================== 云端自动同步 ==================== */
+        const AUTO_SYNC_DELAY = 3000;
+        let autoSyncTimer = null;
+        let lastCloudUpdatedAt = null;  // 最近一次已知云端版本
+        let cachedSha = null;           // 云端文件 sha（'' 表示云端暂无文件）
+        let syncBusy = false;
+
+        function syncConfigured() {
+            return !!(ghConfig.user && ghConfig.repo && ghConfig.token);
+        }
+        function githubDataUrl() {
+            return `https://api.github.com/repos/${ghConfig.user}/${ghConfig.repo}/contents/${FILE_NAME}`;
+        }
+        function setSyncStatus(t) {
+            const el = document.getElementById('syncStatus');
+            if (el) el.innerText = t;
+        }
+
+        function scheduleAutoSync() {
+            if (!syncConfigured() || appData.isSeed) return;
+            clearTimeout(autoSyncTimer);
+            autoSyncTimer = setTimeout(autoPush, AUTO_SYNC_DELAY);
+        }
+
+        async function autoPush() {
+            if (!syncConfigured() || appData.isSeed || syncBusy) return;
+            if (lastCloudUpdatedAt !== null && appData.updatedAt === lastCloudUpdatedAt) return;
+            syncBusy = true;
+            setSyncStatus('🔄 自动同步中...');
+            const ok = await uploadData(true);
+            syncBusy = false;
+            if (!ok) setSyncStatus('⚠️ 自动同步失败（将随下次修改重试）');
+        }
+
+        async function uploadData(silent) {
+            const url = githubDataUrl();
+            let sha = cachedSha === null ? '' : cachedSha;
+            try {
+                const getRes = await fetch(url, { headers: { Authorization: `token ${ghConfig.token}` } });
+                if (getRes.status === 200) sha = (await getRes.json()).sha;
+                else if (getRes.status !== 404) throw new Error('HTTP ' + getRes.status);
+                cachedSha = sha;
+            } catch (e) {
+                if (!silent) alert('网络错误: ' + e.message);
+                return false;
+            }
+            try {
+                const body = { message: '数据同步 ' + new Date().toLocaleString('zh-CN', { hour12: false }), content: utf8ToBase64(JSON.stringify(appData)) };
+                if (sha) body.sha = sha;
+                const putRes = await fetch(url, {
+                    method: 'PUT',
+                    headers: { Authorization: `token ${ghConfig.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (putRes.status === 200 || putRes.status === 201) {
+                    lastCloudUpdatedAt = appData.updatedAt;
+                    setSyncStatus('✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+                    if (!silent) showToast('数据已推送到云端');
+                    return true;
+                }
+                const errData = await putRes.json().catch(() => ({}));
+                if (!silent) {
+                    let hint = '';
+                    if (putRes.status === 404) hint = '\n\n请检查：\n- Token 是否已授权该仓库\n- 用户名/仓库名是否拼写正确';
+                    if (putRes.status === 403 || putRes.status === 401) hint = '\n\n请检查：\n- Token 是否有 Contents 读写权限\n- Token 是否已过期';
+                    alert('推送失败:\nHTTP ' + putRes.status + ': ' + (errData.message || '') + hint);
+                }
+                return false;
+            } catch (error) {
+                if (!silent) alert('推送失败:\n' + error.message);
+                return false;
+            }
+        }
+
+        function pushToGithub() {
+            if (!syncConfigured()) { showToast('请先填写并保存 GitHub 配置'); return; }
+            setSyncStatus('正在推送...');
+            uploadData(false);
+        }
+
+        async function fetchCloud() {
+            const res = await fetch(githubDataUrl(), { headers: { Authorization: `token ${ghConfig.token}` } });
+            if (res.status === 404) { cachedSha = ''; return { notFound: true }; }
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            cachedSha = data.sha;
+            return JSON.parse(base64ToUtf8(data.content.replace(/\n/g, '')));
+        }
+
+        function adoptCloud(cloud) {
+            const localReal = appData.records.length > 0 && !appData.isSeed;
+            if (localReal && appData.updatedAt && cloud.updatedAt && appData.updatedAt !== cloud.updatedAt) {
+                try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e) {}
+            }
+            appData = cloud;
+            if (!appData.products) appData.products = {};
+            if (!appData.records) appData.records = [];
+            appData.isSeed = false;
+            saveData();
+            lastCloudUpdatedAt = appData.updatedAt; // saveData 已重新盖章，视为已同步，不再回推
+        }
+
+        async function initialSync() {
+            if (!syncConfigured()) { setSyncStatus('未开启同步：填写上方配置并保存后自动开启'); return; }
+            if (syncBusy) return;
+            syncBusy = true;
+            setSyncStatus('正在检查云端...');
+            try {
+                const cloud = await fetchCloud();
+                if (cloud.notFound) {
+                    if (!appData.isSeed) await uploadData(true);
+                    else setSyncStatus('云端暂无数据，本机有修改后将自动上传');
+                } else if (appData.isSeed || (cloud.updatedAt || 0) > (appData.updatedAt || 0)) {
+                    adoptCloud(cloud);
+                    renderAllLists();
+                    showToast('已自动同步云端最新数据');
+                } else if ((cloud.updatedAt || 0) < (appData.updatedAt || 0)) {
+                    setSyncStatus('本机数据较新，正在上传...');
+                    await uploadData(true);
+                } else {
+                    lastCloudUpdatedAt = appData.updatedAt;
+                    setSyncStatus('✅ 已与云端同步');
+                }
+            } catch (e) {
+                setSyncStatus('⚠️ 云端检查失败（离线或配置有误）');
+            }
+            syncBusy = false;
+        }
+
+        async function pullFromGithub() {
+            if (!syncConfigured()) { showToast('请先填写并保存 GitHub 配置'); return; }
+            setSyncStatus('正在拉取...');
+            try {
+                const cloud = await fetchCloud();
+                if (cloud.notFound) { setSyncStatus('❌ 云端无数据'); alert('云端还没有数据文件'); return; }
+                adoptCloud(cloud);
+                renderAllLists();
+                setSyncStatus('✅ 拉取成功！');
+                showToast('已从云端恢复数据');
+            } catch (error) {
+                setSyncStatus('❌ 拉取失败');
+                alert('拉取失败:\n' + error.message);
+            }
+        }
+
+        function flushSyncOnExit() {
+            if (!syncConfigured() || appData.isSeed || syncBusy) return;
+            if (lastCloudUpdatedAt === null || appData.updatedAt === lastCloudUpdatedAt || cachedSha === null) return;
+            try {
+                const body = { message: 'auto sync on exit', content: utf8ToBase64(JSON.stringify(appData)) };
+                if (cachedSha) body.sha = cachedSha;
+                fetch(githubDataUrl(), {
+                    method: 'PUT',
+                    keepalive: true,
+                    headers: { Authorization: `token ${ghConfig.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch (e) {}
+        }
+
+        let inMode = 'unit';
+
+        function switchInMode(mode) {
+            inMode = mode;
+            document.getElementById('inModeUnit').classList.toggle('active', mode === 'unit');
+            document.getElementById('inModeTotal').classList.toggle('active', mode === 'total');
+            document.getElementById('inUnitMode').style.display = mode === 'unit' ? 'block' : 'none';
+            document.getElementById('inTotalMode').style.display = mode === 'total' ? 'block' : 'none';
+            document.getElementById('inCost').value = '';
+            document.getElementById('inTotalCost').value = '';
+            document.getElementById('displayCost').innerText = '0.00';
+        }
+
+        function switchFeeMode(m) {
+            const shipForm = document.getElementById('formShip');
+            const expForm = document.getElementById('formExpense');
+            const b1 = document.getElementById('feeModeShip');
+            const b2 = document.getElementById('feeModeExpense');
+            if (m === 'ship') {
+                shipForm.style.display = 'block'; expForm.style.display = 'none';
+                b1.classList.add('active'); b2.classList.remove('active');
+            } else {
+                shipForm.style.display = 'none'; expForm.style.display = 'block';
+                b2.classList.add('active'); b1.classList.remove('active');
+            }
+        }
+
+        function calcInTotal() {
+            const cost = parseFloat(document.getElementById('inCost').value) || 0;
+            document.getElementById('displayCost').innerText = cost.toFixed(2);
+        }
+
+        function calcInUnit() {
+            const total = parseFloat(document.getElementById('inTotalCost').value) || 0;
+            const qty = parseFloat(document.getElementById('inQty').value) || 0;
+            let unit = 0;
+            if (qty > 0) {
+                unit = total / qty;
+            }
+            document.getElementById('displayCost').innerText = unit.toFixed(2);
+        }
+
+        function toggleSaleType() {
+            const type = document.getElementById('outSaleType').value;
+            const splitOptions = document.getElementById('splitSaleOptions');
+            if (type === 'split') {
+                splitOptions.style.display = 'block';
+            } else {
+                splitOptions.style.display = 'none';
+            }
+        }
+
+        document.getElementById('formOut').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('outName').value.trim();
+            const wholeCost = parseFloat(document.getElementById('outCost').value) || 0;
+            const price = parseFloat(document.getElementById('outPrice').value);
+            const qty = parseFloat(document.getElementById('outQty').value);
+            const saleType = document.getElementById('outSaleType').value;
+            const splitQty = saleType === 'split' ? parseFloat(document.getElementById('outSplitQty').value) || 1 : 1;
+            
+            if (!name) { alert('请输入或选择商品名称'); return; }
+            if (isNaN(price) || price <= 0) { alert('请输入有效的卖出单价'); return; }
+            if (isNaN(qty) || qty <= 0) { alert('请输入有效的卖出数量'); return; }
+
+            const key = name.toLowerCase();
+            if (!appData.products[key]) {
+                alert(`商品 [${name}] 不存在，请先入库或从下拉列表中选择已有商品！`);
+                return;
+            }
+
+            if (wholeCost <= 0 && !confirm('未设置成本价（将按成本 0 计算利润，利润会偏高），确定继续吗？')) return;
+
+            const product = appData.products[key];
+            const feeRate = getFeeRate();
+            let unitCost = wholeCost;
+            let stockToDeduct = qty;
+            let costForRecord = wholeCost;
+
+            if (saleType === 'whole') {
+                if (product.stock < qty) {
+                    alert(`库存不足！当前 [${name}] 库存: ${product.stock} 件，无法出单 ${qty} 件。`);
+                    return;
+                }
+                product.stock -= qty;
+                costForRecord = wholeCost;
+            } else if (saleType === 'split') {
+                if (!splitQty || splitQty <= 0) { alert('请输入单套拆分小件数量'); return; }
+                unitCost = wholeCost / splitQty;
+                stockToDeduct = qty / splitQty;
+                
+                if (product.stock < stockToDeduct) {
+                    alert(`库存不足！当前库存: ${product.stock} 套 (可拆分: ${Math.floor(product.stock * splitQty)}件)`);
+                    return;
+                }
+                product.stock -= stockToDeduct;
+                costForRecord = unitCost;
+            }
+
+            const fee = price * qty * feeRate;
+            const profit = (price * qty) - (costForRecord * qty) - fee;
+
+            addRecord('out', { name, price, cost: costForRecord, qty, profit, fee, saleType, splitQty: saleType === 'split' ? splitQty : 0 });
+        });
+
+        function deleteRecord(id) {
+            if(!confirm('确定要删除这条记录吗？')) return;
+            const index = appData.records.findIndex(r => String(r.id) === String(id));
+            if (index === -1) return;
+            const record = appData.records[index];
+            const productName = record.name;
+            
+            if (appData.products[productName]) {
+                if (record.type === 'in') appData.products[productName].stock -= record.qty;
+                else if (record.type === 'out') {
+                    if (record.saleType === 'split') {
+                        appData.products[productName].stock += record.qty / (record.splitQty || 1);
+                    } else {
+                        appData.products[productName].stock += record.qty;
+                    }
+                }
+                else if (record.type === 'return') appData.products[productName].stock -= record.qty;
+            }
+
+            appData.records.splice(index, 1);
+            appData.isSeed = false;
+            saveData();
+            showToast('已删除');
+            renderAllLists();
+        }
+
+        function openEditModal(id) {
+            const record = appData.records.find(r => String(r.id) === String(id));
+            if (!record) return;
+            document.getElementById('editId').value = record.id;
+            document.getElementById('editType').value = record.type;
+            document.getElementById('editName').value = record.name;
+            document.getElementById('editQty').value = record.qty;
+            const priceGroup = document.getElementById('editPriceGroup');
+            const costGroup = document.getElementById('editCostGroup');
+            const qtyLabel = document.getElementById('editQtyLabel');
+            priceGroup.style.display = 'none';
+            costGroup.style.display = 'none';
+            if (record.type === 'ship' || record.type === 'expense') {
+                qtyLabel.innerText = '金额 (元)';
+            } else {
+                qtyLabel.innerText = '数量';
+                if (record.type === 'in' || record.type === 'return') {
+                    costGroup.style.display = 'block';
+                    document.getElementById('editCost').value = record.cost;
+                } else if (record.type === 'out') {
+                    priceGroup.style.display = 'block';
+                    costGroup.style.display = 'block';
+                    document.getElementById('editPrice').value = record.price;
+                    document.getElementById('editCost').value = record.cost;
+                }
+            }
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+
+        document.getElementById('formEdit').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            const record = appData.records.find(r => String(r.id) === String(id));
+            if (!record) return;
+
+            const oldName = record.name;
+            const oldQty = record.qty;
+            const oldSplitQty = record.splitQty || 1;
+            const oldSaleType = record.saleType || 'whole';
+
+            if (appData.products[oldName]) {
+                if (record.type === 'in') appData.products[oldName].stock -= oldQty;
+                if (record.type === 'out') {
+                    if (oldSaleType === 'split') {
+                        appData.products[oldName].stock += oldQty / oldSplitQty;
+                    } else {
+                        appData.products[oldName].stock += oldQty;
+                    }
+                }
+                if (record.type === 'return') appData.products[oldName].stock -= oldQty;
+            }
+
+            record.name = document.getElementById('editName').value.trim() || record.name;
+            record.qty = parseFloat(document.getElementById('editQty').value) || 0;
+            const feeRate = getFeeRate();
+            
+            if (record.type === 'in' || record.type === 'return') {
+                record.cost = parseFloat(document.getElementById('editCost').value) || 0;
+            } else if (record.type === 'out') {
+                record.price = parseFloat(document.getElementById('editPrice').value) || 0;
+                record.cost = parseFloat(document.getElementById('editCost').value) || 0;
+                const fee = record.price * record.qty * feeRate;
+                record.fee = fee;
+                record.profit = (record.price * record.qty) - (record.cost * record.qty) - fee;
+            }
+            
+            if (record.type === 'ship' || record.type === 'expense') {
+                record.amount = record.qty;
+                if (record.type === 'expense' && !record.name) record.name = record.category || '其他支出';
+            }
+
+            const newNameKey = record.name.toLowerCase();
+            if (!appData.products[newNameKey]) appData.products[newNameKey] = { name: record.name, cost: record.cost || 0, stock: 0 };
+            
+            const prod = appData.products[newNameKey];
+            if (record.cost > 0) prod.cost = record.cost;
+
+            if (record.type === 'in') prod.stock += record.qty;
+            if (record.type === 'out') {
+                if (record.saleType === 'split') {
+                    prod.stock -= record.qty / record.splitQty;
+                } else {
+                    prod.stock -= record.qty;
+                }
+            }
+            if (record.type === 'return') prod.stock += record.qty;
+
+            appData.isSeed = false;
+            saveData();
+            closeModal();
+            showToast('修改成功');
+            renderAllLists();
+        });
+
+        document.getElementById('formIn').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('inName').value.trim();
+            let cost = 0;
+            const qty = parseFloat(document.getElementById('inQty').value) || 0;
+
+            if (inMode === 'total') {
+                const total = parseFloat(document.getElementById('inTotalCost').value) || 0;
+                if (qty > 0) cost = total / qty;
+            } else {
+                cost = parseFloat(document.getElementById('inCost').value) || 0;
+            }
+
+            if (cost <= 0) { alert('请输入有效的成本或总价'); return; }
+
+            const key = name.toLowerCase();
+            if (!appData.products[key]) appData.products[key] = { name, cost: 0, stock: 0 };
+            
+            const p = appData.products[key];
+            const oldTotalCost = p.stock * p.cost;
+            const newTotalCost = qty * cost;
+            const newStock = p.stock + qty;
+            
+            if (newStock > 0) {
+                p.cost = (oldTotalCost + newTotalCost) / newStock;
+            }
+            p.stock = newStock;
+
+            addRecord('in', { name, cost, qty });
+        });
+
+        document.getElementById('formReturn').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('retName').value.trim();
+            const qty = parseFloat(document.getElementById('retQty').value);
+            const price = parseFloat(document.getElementById('retPrice').value);
+
+            const key = name.toLowerCase();
+            if (!appData.products[key]) appData.products[key] = { name, cost: 0, stock: 0 };
+            appData.products[key].stock += qty;
+
+            const fee = price * qty * getFeeRate();
+            const totalReturn = price * qty + fee;
+
+            addRecord('return', { name, qty, price, fee, totalReturn });
+        });
+
+        document.getElementById('formShip').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('shipAmount').value);
+            const date = document.getElementById('shipDate').value;
+            const note = document.getElementById('shipNote').value.trim();
+            
+            if (isNaN(amount) || amount <= 0) { alert('请输入有效的运费金额'); return; }
+            if (!date) {
+                alert('请选择运费日期');
+                return;
+            }
+
+            addRecord('ship', { name: note || '运费支出', qty: amount, price: 0, cost: 0, timestamp: new Date(date + 'T12:00:00').toISOString() });
+        });
+
+        document.getElementById('formExpense').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('expenseAmount').value);
+            const date = document.getElementById('expenseDate').value;
+            const cat = document.getElementById('expenseCat').value;
+            const note = document.getElementById('expenseNote').value.trim();
+
+            if (isNaN(amount) || amount <= 0) { alert('请输入有效的支出金额'); return; }
+            if (!date) { alert('请选择支出日期'); return; }
+
+            addRecord('expense', {
+                name: note || cat,
+                qty: amount,
+                price: 0,
+                cost: 0,
+                category: cat,
+                note: note,
+                timestamp: new Date(date + 'T12:00:00').toISOString()
+            });
+        });
+
+        function toggleDateInputs() {
+            const type = document.getElementById('dateFilterType').value;
+            const customInputs = document.getElementById('customDateInputs');
+            if (type === 'custom') {
+                customInputs.style.display = 'flex';
+                const today = todayStr();
+                document.getElementById('dateStart').value = today;
+                document.getElementById('dateEnd').value = today;
+                updateDashboard();
+            } else {
+                customInputs.style.display = 'none';
+                updateDashboard();
+            }
+        }
+
+        function getDashRange() {
+            const filter = document.getElementById('dateFilterType').value;
+            const now = new Date();
+            if (filter === 'all') return null;
+            if (filter === 'today') {
+                const start = new Date(now); start.setHours(0, 0, 0, 0);
+                return { start, end: new Date() };
+            }
+            if (filter === 'week') {
+                const day = now.getDay() || 7;
+                const start = new Date(now);
+                if (day !== 1) start.setHours(-24 * (day - 1));
+                start.setHours(0, 0, 0, 0);
+                return { start, end: new Date() };
+            }
+            if (filter === 'month') {
+                return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date() };
+            }
+            if (filter === 'custom') {
+                const startVal = document.getElementById('dateStart').value;
+                const endVal = document.getElementById('dateEnd').value;
+                if (!startVal || !endVal) return null;
+                const start = new Date(startVal); start.setHours(0, 0, 0, 0);
+                const end = new Date(endVal); end.setHours(23, 59, 59, 999);
+                return { start, end };
+            }
+            return null;
+        }
+
+        function updateDashboard() {
+            let sales = 0; let shipping = 0; let profit = 0; let totalCost = 0; let stockCostTotal = 0;
+            let feeTotal = 0; let expenseTotal = 0; let orderCount = 0; let refundTotal = 0;
+            const range = getDashRange();
+
+            appData.records.forEach(r => {
+                if (range) {
+                    const rTime = new Date(r.timestamp);
+                    if (!(rTime >= range.start && rTime <= range.end)) return;
+                }
+
+                if (r.type === 'out') {
+                    sales += (r.price * r.qty) - (r.fee || 0);
+                    profit += r.profit || 0;
+                    totalCost += r.cost * r.qty;
+                    feeTotal += r.fee || 0;
+                    orderCount++;
+                } else if (r.type === 'ship') {
+                    shipping += r.qty; totalCost += r.qty; profit -= r.qty;
+                } else if (r.type === 'expense') {
+                    expenseTotal += r.qty; totalCost += r.qty; profit -= r.qty;
+                } else if (r.type === 'return') {
+                    const amt = r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
+                    sales -= amt;
+                    refundTotal += amt;
+                }
+            });
+
+            Object.values(appData.products).forEach(p => { stockCostTotal += p.stock * p.cost; });
+            let rate = 0; if (sales > 0) rate = (profit / sales) * 100;
+
+            document.getElementById('totalProfit').innerText = `¥${profit.toFixed(2)}`;
+            document.getElementById('profitRate').innerText = `利润率: ${rate.toFixed(1)}% ｜ ${orderCount} 笔出单 ｜ 退款 ¥${refundTotal.toFixed(0)}`;
+            document.getElementById('totalSales').innerText = `¥${sales.toFixed(2)}`;
+            document.getElementById('totalCost').innerText = `¥${totalCost.toFixed(2)}`;
+            document.getElementById('stockCost').innerText = `¥${stockCostTotal.toFixed(2)}`;
+            document.getElementById('totalShipping').innerText = `¥${shipping.toFixed(2)}`;
+            document.getElementById('totalExpense').innerText = `¥${expenseTotal.toFixed(2)}`;
+            document.getElementById('totalFee').innerText = `¥${feeTotal.toFixed(2)}`;
+        }
+
+        function renderAllLists() {
+            renderHomeList();
+            renderTabList('listIn', 'in');
+            renderTabList('listOut', 'out');
+            renderTabList('listReturn', 'return');
+            renderFeeList();
+            renderStockList();
+        }
+
+        function renderStockList() {
+            const container = document.getElementById('stockList');
+            const keys = Object.keys(appData.products).sort();
+            if (keys.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无商品库存</div>';
+                return;
+            }
+
+            let html = '';
+            keys.forEach(key => {
+                const p = appData.products[key];
+                const totalVal = p.stock * p.cost;
+                const zero = p.stock <= 0.0001;
+                const low = !zero && p.stock <= 5;
+                const tag = zero ? '<span class="stock-tag tag-danger">缺货</span>' : (low ? '<span class="stock-tag tag-warn">库存偏低</span>' : '');
+                html += `
+                <div class="stock-item">
+                    <div class="stock-item-info">
+                        <h4>${esc(p.name)}${tag}</h4>
+                        <p>库存: ${p.stock.toFixed(2)} 件</p>
+                    </div>
+                    <div class="stock-item-value">
+                        <div class="total-val">¥${totalVal.toFixed(2)}</div>
+                        <div class="avg-cost">均价: ¥${p.cost.toFixed(2)}/件</div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderTabList(containerId, type) {
+            const container = document.getElementById(containerId);
+            const list = appData.records.filter(r => r.type === type);
+            
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 10px;">暂无记录</div>';
+                return;
+            }
+
+            let html = '';
+            list.forEach(item => {
+                let detail = '';
+                let moneyStr = '';
+
+                if (type === 'in') {
+                    detail = `数量: ${item.qty} | 成本: ¥${item.cost.toFixed(2)}`;
+                    moneyStr = `<span class="money expense">-¥${(item.cost * item.qty).toFixed(2)}</span>`;
+                } else if (type === 'out') {
+                    detail = `数量: ${item.qty} | 售价: ¥${item.price}`;
+                    if (item.saleType === 'split') {
+                        detail += ` | 拆分${item.splitQty}件`;
+                    }
+                    moneyStr = `<span class="money profit">+¥${item.profit.toFixed(2)}</span>`;
+                } else if (type === 'return') {
+                    detail = `数量: ${item.qty} | 退额: ¥${item.price}`;
+                    moneyStr = `<span class="money loss">-¥${item.totalReturn.toFixed(2)}</span>`;
+                } else if (type === 'ship') {
+                    detail = `备注: ${item.name}`;
+                    moneyStr = `<span class="money expense">-¥${item.qty.toFixed(2)}</span>`;
+                } else if (type === 'expense') {
+                    detail = `分类: ${item.category || '其他'}${item.note ? ' | ' + item.note : ''}`;
+                    moneyStr = `<span class="money" style="color: var(--purple);">-¥${item.qty.toFixed(2)}</span>`;
+                }
+
+                const dateStr = new Date(item.timestamp).toLocaleString('zh-CN', {hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+
+                html += `
+                <div class="record-item type-${type}">
+                    <div class="record-info">
+                        <h4>${esc(item.name)}</h4>
+                        <p>${detail} <span style="margin-left:5px; font-size:0.75rem; color:#bbb;">${dateStr}</span></p>
+                    </div>
+                    <div class="record-meta">
+                        ${moneyStr}
+                        <div class="record-actions">
+                            <a href="javascript:void(0)" class="action-link" onclick="openEditModal('${item.id}')">修改</a>
+                            <a href="javascript:void(0)" class="action-link delete" onclick="deleteRecord('${item.id}')">删除</a>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderFeeList() {
+            const container = document.getElementById('listFee');
+            const list = appData.records.filter(r => r.type === 'ship' || r.type === 'expense')
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 10px;">暂无记录</div>';
+                return;
+            }
+
+            let html = '';
+            list.forEach(item => {
+                const isExp = item.type === 'expense';
+                const title = isExp ? (item.category || '其他支出') : '运费支出';
+                let detail = isExp ? (item.note || '') : (item.name && item.name !== '运费支出' ? item.name : '');
+                if (!detail) detail = isExp ? item.name : '';
+                const dateStr = new Date(item.timestamp).toLocaleString('zh-CN', {hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+                const moneyStr = isExp
+                    ? `<span class="money" style="color: var(--purple);">-¥${Number(item.qty).toFixed(2)}</span>`
+                    : `<span class="money expense">-¥${Number(item.qty).toFixed(2)}</span>`;
+
+                html += `
+                <div class="record-item type-${item.type}">
+                    <div class="record-info">
+                        <h4>${esc(title)}</h4>
+                        <p>${esc(detail)} <span style="margin-left:5px; font-size:0.75rem; color:#bbb;">${dateStr}</span></p>
+                    </div>
+                    <div class="record-meta">
+                        ${moneyStr}
+                        <div class="record-actions">
+                            <a href="javascript:void(0)" class="action-link" onclick="openEditModal('${item.id}')">修改</a>
+                            <a href="javascript:void(0)" class="action-link delete" onclick="deleteRecord('${item.id}')">删除</a>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderHomeList() {
+            const container = document.getElementById('recordList');
+            const filter = document.getElementById('filterType').value;
+            let list = appData.records;
+            if (filter !== 'all') list = list.filter(r => r.type === filter);
+            list = list.slice(0, 20);
+
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无记录</div>';
+                return;
+            }
+
+            let html = '';
+            list.forEach(item => {
+                let subText = '';
+                let moneySign = '';
+                let title = item.name;
+
+                if (item.type === 'in') {
+                    subText = `入库 ${item.qty}件 @ ¥${item.cost.toFixed(2)}`;
+                    moneySign = `<span style="color:#2196f3; font-weight:bold;">-¥${(item.cost * item.qty).toFixed(2)}</span>`;
+                } else if (item.type === 'out') {
+                    subText = `出单 ${item.qty}件 @ ¥${item.price}`;
+                    if (item.saleType === 'split') {
+                        subText += ` (拆分${item.splitQty}件)`;
+                    }
+                    moneySign = `<span style="color:var(--success); font-weight:bold;">+¥${item.profit.toFixed(2)}</span>`;
+                } else if (item.type === 'return') {
+                    subText = `退货 ${item.qty}件`;
+                    moneySign = `<span style="color:var(--warning); font-weight:bold;">-¥${item.totalReturn.toFixed(2)}</span>`;
+                } else if (item.type === 'ship') {
+                    title = '运费支出';
+                    subText = item.name || '运费';
+                    moneySign = `-¥${item.qty.toFixed(2)}`;
+                } else if (item.type === 'expense') {
+                    title = item.category || '其他支出';
+                    subText = item.note || item.name;
+                    moneySign = `<span style="color:var(--purple); font-weight:bold;">-¥${item.qty.toFixed(2)}</span>`;
+                }
+
+                const dateStr = new Date(item.timestamp).toLocaleString('zh-CN', {hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+
+                html += `
+                <div class="record-item type-${item.type}">
+                    <div class="record-info">
+                        <h4>${esc(title)}</h4>
+                        <p>${esc(subText)} <span style="float:right; color:#999;">${dateStr}</span></p>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:bold; font-size:0.9rem;">${moneySign}</span>
+                        <div class="record-actions" style="justify-content: flex-end; margin-top:5px;">
+                            <a href="javascript:void(0)" class="action-link" onclick="openEditModal('${item.id}')">改</a>
+                            <a href="javascript:void(0)" class="action-link delete" onclick="deleteRecord('${item.id}')">删</a>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function runCalculator() {
+            const cost = parseFloat(document.getElementById('calcCost').value) || 0;
+            const price = parseFloat(document.getElementById('calcPrice').value) || 0;
+            
+            if(price > 0) {
+                const fee = price * getFeeRate();
+                const profit = price - cost - fee;
+                const rate = price > 0 ? (profit / price * 100).toFixed(1) : 0;
+                
+                let color = profit >= 0 ? 'var(--success)' : 'var(--danger)';
+                document.getElementById('calcResult').innerHTML = `
+                    预估利润: <span style="color:${color}; font-size:1.2em;">¥${profit.toFixed(2)}</span>
+                    <span style="font-size:0.9em; margin-left:5px;">(利润率: ${rate}%)</span>
+                `;
+            } else {
+                document.getElementById('calcResult').innerText = "请输入价格进行计算";
+            }
+        }
+
+        function showSuggestions(type) {
+            const inputId = type === 'in' ? 'inName' : (type === 'out' ? 'outName' : 'retName');
+            const boxId = type === 'in' ? 'inSuggestions' : (type === 'out' ? 'outSuggestions' : 'retSuggestions');
+            const input = document.getElementById(inputId);
+            const box = document.getElementById(boxId);
+            
+            const keys = Object.keys(appData.products).sort();
+            if (keys.length === 0) { box.style.display = 'none'; return; }
+
+            box.innerHTML = '';
+            keys.forEach(k => {
+                const p = appData.products[k];
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.innerHTML = `<div>${esc(p.name)}</div><div><small>存:${p.stock.toFixed(2)}</small> <span>均:${p.cost.toFixed(2)}</span></div>`;
+                div.onclick = () => {
+                    input.value = p.name;
+                    box.style.display = 'none';
+                    if (type === 'out') document.getElementById('outCost').value = p.cost.toFixed(2);
+                };
+                box.appendChild(div);
+            });
+            box.style.display = 'block';
+        }
+        
+        ['in', 'out', 'return'].forEach(type => {
+            const inputId = type === 'in' ? 'inName' : (type === 'out' ? 'outName' : 'retName');
+            const boxId = type === 'in' ? 'inSuggestions' : (type === 'out' ? 'outSuggestions' : 'retSuggestions');
+            document.getElementById(inputId).addEventListener('input', function() {
+                const val = this.value.toLowerCase();
+                const box = document.getElementById(boxId);
+                if (!val) { showSuggestions(type); return; }
+                const matches = Object.keys(appData.products).filter(k => k.includes(val));
+                box.innerHTML = '';
+                if (matches.length > 0) {
+                    matches.forEach(k => {
+                        const p = appData.products[k];
+                        const div = document.createElement('div');
+                        div.className = 'suggestion-item';
+                        div.innerHTML = `<div>${esc(p.name)}</div><div><small>存:${p.stock.toFixed(2)}</small> <span>本:${p.cost.toFixed(2)}</span></div>`;
+                        div.onclick = () => {
+                            document.getElementById(inputId).value = p.name;
+                            box.style.display = 'none';
+                            if (type === 'out') document.getElementById('outCost').value = p.cost.toFixed(2);
+                        };
+                        box.appendChild(div);
+                    });
+                    box.style.display = 'block';
+                } else { box.style.display = 'none'; }
+            });
+        });
+
+        function downloadFile(content, filename, mime) {
+            const blob = new Blob([content], { type: mime + ';charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function csvEsc(v) {
+            const s = String(v == null ? '' : v);
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+
+        function exportData() {
+            const dataStr = JSON.stringify(appData, null, 2);
+            downloadFile(dataStr, `pdd_biz_pro_backup_${todayStr()}.json`, 'application/json');
+            showToast('导出成功，请在新页面点击"分享"按钮保存文件');
+        }
+
+        function triggerImport() { document.getElementById('importFile').click(); }
+
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    if (json.products && json.records) {
+                        appData = json;
+                        if (!appData.products) appData.products = {};
+                        if (!appData.records) appData.records = [];
+                        appData.isSeed = false;
+                        localStorage.setItem('pddSeeded', '1');
+                        saveData();
+                        alert('恢复成功！');
+                        location.reload();
+                    } else { alert('文件格式不正确'); }
+                } catch (err) { alert('文件解析失败'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function clearAllData() {
+            if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
+            if (!confirm('再次确认：所有商品与记录都会被删除！建议先"备份JSON"或导出CSV。\n（若已开启云同步，清空结果也会同步到云端）')) return;
+            appData = { products: {}, records: [], isSeed: false };
+            localStorage.setItem('pddSeeded', '1');
+            saveData();
+            renderAllLists();
+            showToast('数据已清空');
+        }
+
+        function exportCSV() {
+            const rows = [['时间','类型','名称/备注','数量','单价(元)','金额(元)','成本单价(元)','手续费(元)','利润(元)','备注']];
+            const sorted = appData.records.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            sorted.forEach(r => {
+                const t = new Date(r.timestamp).toLocaleString('zh-CN', { hour12: false });
+                let row = null;
+                if (r.type === 'in') {
+                    row = [t, '入库', r.name, r.qty, r.cost.toFixed(2), (r.qty * r.cost).toFixed(2), r.cost.toFixed(2), '', '', ''];
+                } else if (r.type === 'out') {
+                    row = [t, '出单', r.name, r.qty, r.price, (r.price * r.qty).toFixed(2), Number(r.cost).toFixed(2), (r.fee || 0).toFixed(2), (r.profit || 0).toFixed(2), r.saleType === 'split' ? ('拆分销售(每套' + r.splitQty + '件)') : '整套销售'];
+                } else if (r.type === 'return') {
+                    row = [t, '退货', r.name, r.qty, r.price, (r.totalReturn || 0).toFixed(2), '', '', '', '退款'];
+                } else if (r.type === 'ship') {
+                    row = [t, '运费', r.name === '运费支出' ? '' : r.name, '', '', Number(r.qty).toFixed(2), '', '', '', ''];
+                } else if (r.type === 'expense') {
+                    row = [t, '其他支出', r.note || '', '', '', Number(r.qty).toFixed(2), '', '', '', (r.category || '') + (r.note ? ('｜' + r.note) : '')];
+                }
+                if (row) rows.push(row);
+            });
+            downloadFile('\uFEFF' + rows.map(r => r.map(csvEsc).join(',')).join('\r\n'), `经营明细_${todayStr()}.csv`, 'text/csv');
+            showToast('明细CSV已导出');
+        }
+
+        function exportSummaryCSV() {
+            const agg = {};
+            appData.records.forEach(r => {
+                if (r.type !== 'out') return;
+                const k = (r.name || '').toLowerCase();
+                const a = agg[k] || (agg[k] = { name: r.name, qty: 0, sales: 0, profit: 0, orders: 0 });
+                a.qty += r.qty;
+                a.sales += r.price * r.qty;
+                a.profit += r.profit || 0;
+                a.orders++;
+            });
+            const rows = [['商品','当前库存','成本均价(元)','库存价值(元)','累计销量(件)','累计销售额(元)','累计利润(元)','出单笔数']];
+            Object.values(appData.products).forEach(p => {
+                const a = agg[p.name.toLowerCase()] || { qty: 0, sales: 0, profit: 0, orders: 0 };
+                rows.push([p.name, p.stock.toFixed(2), p.cost.toFixed(2), (p.stock * p.cost).toFixed(2), a.qty, a.sales.toFixed(2), a.profit.toFixed(2), a.orders]);
+            });
+            downloadFile('\uFEFF' + rows.map(r => r.map(csvEsc).join(',')).join('\r\n'), `经营汇总_${todayStr()}.csv`, 'text/csv');
+            showToast('汇总CSV已导出');
+        }
+
+        function switchTab(tabId, navEl) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            navEl.classList.add('active');
+            document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+            document.getElementById('page-' + tabId).classList.add('active');
+            if (tabId === 'stats') renderStats();
+            window.scrollTo(0, 0);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 2000);
+        }
+
+        function addRecord(type, data) {
+            const record = {
+                id: genId(),
+                type: type,
+                timestamp: new Date().toISOString(),
+                ...data
+            };
+            appData.records.unshift(record); 
+            appData.isSeed = false;
+            saveData();
+            showToast('添加成功');
+            
+            const forms = ['formIn', 'formOut', 'formReturn', 'formShip', 'formExpense'];
+            forms.forEach(fId => {
+                const f = document.getElementById(fId);
+                if(f) {
+                    f.reset();
+                    if(fId === 'formOut') document.getElementById('outCost').value = '';
+                }
+            });
+            document.getElementById('shipDate').value = todayStr();
+            document.getElementById('expenseDate').value = todayStr();
+
+            renderAllLists();
+        }
+
+        /* ==================== 统计分析 ==================== */
+
+        function getStatsRange() {
+            const v = document.getElementById('statsRange').value;
+            const now = new Date();
+            const end = new Date(); end.setHours(23, 59, 59, 999);
+            let start;
+            if (v === '7') {
+                start = new Date(); start.setDate(now.getDate() - 6); start.setHours(0, 0, 0, 0);
+            } else if (v === '30') {
+                start = new Date(); start.setDate(now.getDate() - 29); start.setHours(0, 0, 0, 0);
+            } else if (v === 'month') {
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+            } else {
+                start = new Date(0);
+            }
+            return { start, end };
+        }
+
+        function emptyHtml(t) {
+            return `<div style="text-align:center;color:#999;padding:14px 0;">${t}</div>`;
+        }
+
+        function barRowHTML(label, valueText, pct, colorClass) {
+            return `<div class="bar-row">
+                <div class="bar-label" title="${label}">${label}</div>
+                <div class="bar-track"><div class="bar-fill ${colorClass || ''}" style="width:${Math.max(pct, 1.5).toFixed(1)}%"></div></div>
+                <div class="bar-value">${valueText}</div>
+            </div>`;
+        }
+
+        function renderStats() {
+            const { start, end } = getStatsRange();
+            const recs = appData.records.filter(r => {
+                const t = new Date(r.timestamp);
+                return t >= start && t <= end;
+            });
+
+            let orders = 0, soldQty = 0, grossSales = 0, feeTotal = 0, profit = 0, shipExp = 0, otherExp = 0, refundTotal = 0;
+            const prodAgg = {};
+            recs.forEach(r => {
+                if (r.type === 'out') {
+                    const s = r.price * r.qty;
+                    grossSales += s; feeTotal += r.fee || 0; profit += r.profit || 0;
+                    orders++; soldQty += r.qty;
+                    const k = (r.name || '').toLowerCase();
+                    const a = prodAgg[k] || (prodAgg[k] = { name: r.name, sales: 0, profit: 0, qty: 0 });
+                    a.sales += s; a.profit += r.profit || 0; a.qty += r.qty;
+                } else if (r.type === 'ship') {
+                    shipExp += r.qty; profit -= r.qty;
+                } else if (r.type === 'expense') {
+                    otherExp += r.qty; profit -= r.qty;
+                } else if (r.type === 'return') {
+                    refundTotal += r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
+                }
+            });
+            const netSales = grossSales - refundTotal;
+            const refundRate = grossSales > 0 ? refundTotal / grossSales * 100 : 0;
+
+            // 核心指标卡
+            const cards = [
+                { l: '出单笔数', v: orders },
+                { l: '销量(件)', v: soldQty % 1 === 0 ? soldQty : soldQty.toFixed(1) },
+                { l: '客单价', v: orders > 0 ? '¥' + (netSales / orders).toFixed(1) : '¥0' },
+                { l: '退款率', v: refundRate.toFixed(1) + '%' }
+            ];
+            document.getElementById('miniStats').innerHTML = cards.map(c =>
+                `<div class="mini-stat"><span class="v">${c.v}</span><span class="l">${c.l}</span></div>`).join('');
+
+            // 经营洞察
+            renderInsights(recs, { grossSales, refundTotal, refundRate, prodAgg });
+
+            // 利润趋势
+            const bObj = buildBuckets(recs, start, end);
+            drawTrend(bObj);
+            const posDays = bObj.list.filter(b => b.value > 0).length;
+            const unit = bObj.useMonth ? '月均' : '日均';
+            const avg = bObj.list.length ? profit / bObj.list.length : 0;
+            document.getElementById('trendSummary').innerText =
+                `期间净利润 ¥${profit.toFixed(2)} ｜ ${unit} ¥${avg.toFixed(2)} ｜ 盈利 ${posDays}/${bObj.list.length} ${bObj.useMonth ? '个月' : '天'}`;
+
+            // 商品贡献排行
+            const rankArr = Object.values(prodAgg).sort((a, b) => b.sales - a.sales).slice(0, 8);
+            const rankBox = document.getElementById('rankBox');
+            if (!rankArr.length) {
+                rankBox.innerHTML = emptyHtml('该时段暂无出单记录');
+            } else {
+                const maxS = rankArr[0].sales || 1;
+                rankBox.innerHTML = rankArr.map(a =>
+                    barRowHTML(esc(a.name), `¥${a.sales.toFixed(0)}｜利¥${a.profit.toFixed(0)}`, a.sales / maxS * 100, a.profit < 0 ? '' : 'green')
+                ).join('');
+            }
+
+            // 支出构成
+            const expSum = shipExp + otherExp + feeTotal;
+            const expBox = document.getElementById('expenseBox');
+            if (!expSum) {
+                expBox.innerHTML = emptyHtml('该时段暂无费用支出');
+            } else {
+                const items = [
+                    ['🚚 运费', shipExp, 'blue'],
+                    ['🧾 其他支出', otherExp, 'purple'],
+                    ['💳 手续费', feeTotal, '']
+                ].filter(x => x[1] > 0);
+                expBox.innerHTML = items.map(([l, v, c]) => barRowHTML(l, '¥' + v.toFixed(2), v / expSum * 100, c)).join('')
+                    + `<div class="trend-summary">费用合计: ¥${expSum.toFixed(2)}${netSales > 0 ? '（占净销售额 ' + (expSum / netSales * 100).toFixed(1) + '%）' : ''}</div>`;
+            }
+
+            // 库存构成
+            renderStockMix();
+        }
+
+        function renderInsights(recs, agg) {
+            const box = document.getElementById('insightBox');
+            if (!recs.length) {
+                box.innerHTML = '<div class="insight-item">该时段暂无数据，去记录一笔吧～</div>';
+                return;
+            }
+            let html = '';
+            const top = Object.values(agg.prodAgg).sort((a, b) => b.profit - a.profit)[0];
+            if (top) {
+                html += `<div class="insight-item">🏆 期间最佳: <b>${esc(top.name)}</b> 贡献利润 ¥${top.profit.toFixed(2)}（销量 ${top.qty % 1 === 0 ? top.qty : top.qty.toFixed(1)} 件）</div>`;
+            }
+            if (agg.grossSales > 0) {
+                const rr = agg.refundRate;
+                html += `<div class="insight-item">${rr > 10 ? '⚠️' : '✅'} 退款率 ${rr.toFixed(1)}%（退款 ¥${agg.refundTotal.toFixed(2)}）${rr > 10 ? '，偏高，建议排查商品质量与物流' : ''}</div>`;
+            }
+            // 滞销提醒（基于全部历史记录）
+            const lastOut = {};
+            appData.records.forEach(r => {
+                if (r.type === 'out') {
+                    const t = new Date(r.timestamp).getTime();
+                    const k = (r.name || '').toLowerCase();
+                    if (!lastOut[k] || t > lastOut[k]) lastOut[k] = t;
+                }
+            });
+            const stale = Object.values(appData.products)
+                .filter(p => p.stock > 0.0001 && (!lastOut[p.name.toLowerCase()] || (Date.now() - lastOut[p.name.toLowerCase()]) > 30 * 86400000))
+                .map(p => ({ name: p.name, v: p.stock * p.cost }))
+                .sort((a, b) => b.v - a.v).slice(0, 3);
+            if (stale.length) {
+                html += `<div class="insight-item">📦 疑似滞销(超30天无销量): ${stale.map(s => `${esc(s.name)}(¥${s.v.toFixed(0)})`).join('、')}</div>`;
+            }
+            box.innerHTML = html;
+        }
+
+        function buildBuckets(recs, start, end) {
+            const now = new Date(); now.setHours(23, 59, 59, 999);
+            const effEnd = end < now ? end : now;
+            const spanDays = Math.max(1, Math.ceil((effEnd - start) / 86400000));
+            const useMonth = spanDays > 62;
+            const map = {}; const order = [];
+            if (useMonth) {
+                const d = new Date(start.getFullYear(), start.getMonth(), 1);
+                const lastD = new Date();
+                while (d <= lastD) {
+                    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                    map[key] = 0; order.push(key);
+                    d.setMonth(d.getMonth() + 1);
+                }
+            } else {
+                const d = new Date(start); d.setHours(0, 0, 0, 0);
+                const lastD = new Date(); lastD.setHours(0, 0, 0, 0);
+                let guard = 0;
+                while (d <= lastD && guard < 400) {
+                    const key = (d.getMonth() + 1) + '/' + d.getDate();
+                    map[key] = 0; order.push(key);
+                    d.setDate(d.getDate() + 1); guard++;
+                }
+            }
+            recs.forEach(r => {
+                if (r.type !== 'out' && r.type !== 'ship' && r.type !== 'expense') return;
+                const t = new Date(r.timestamp);
+                const key = useMonth
+                    ? (t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'))
+                    : ((t.getMonth() + 1) + '/' + t.getDate());
+                if (!(key in map)) return;
+                if (r.type === 'out') map[key] += (r.profit || 0);
+                else map[key] -= r.qty;
+            });
+            let list = order.map(k => ({ label: k, value: +map[k].toFixed(2) }));
+            const cap = useMonth ? 24 : 93;
+            if (list.length > cap) {
+                const keep = list.slice(list.length - cap);
+                const dropped = list.slice(0, list.length - cap);
+                const earlyVal = dropped.reduce((s, b) => s + b.value, 0);
+                keep[0] = { label: '更早', value: +(keep[0].value + earlyVal).toFixed(2) };
+                list = keep;
+            }
+            return { list, useMonth };
+        }
+
+        function drawTrend(bObj) {
+            const canvas = document.getElementById('trendCanvas');
+            const buckets = bObj.list;
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = canvas.clientWidth || 340;
+            const cssH = 180;
+            canvas.width = cssW * dpr;
+            canvas.height = cssH * dpr;
+            canvas.style.height = cssH + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
+            if (!buckets.length) {
+                ctx.fillStyle = '#999'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('暂无数据', cssW / 2, cssH / 2);
+                return;
+            }
+            const maxAbs = Math.max(...buckets.map(b => Math.abs(b.value)), 1);
+            const anyNeg = buckets.some(b => b.value < 0);
+            const padL = 6, padR = 6, padT = 16, padB = 20;
+            const chartW = cssW - padL - padR, chartH = cssH - padT - padB;
+            const zeroY = padT + chartH * (anyNeg ? 0.55 : 0.85);
+            const scale = anyNeg ? chartH * 0.45 : chartH * 0.8;
+            const bw = chartW / buckets.length;
+            const barW = Math.max(2, bw * 0.62);
+
+            buckets.forEach((b, i) => {
+                if (b.value === 0) return;
+                const h = Math.max(1.5, Math.abs(b.value) / maxAbs * scale);
+                const x = padL + i * bw + (bw - barW) / 2;
+                ctx.fillStyle = b.value > 0 ? '#00c853' : '#ff1744';
+                const y = b.value > 0 ? zeroY - h : zeroY;
+                ctx.fillRect(x, y, barW, h);
+            });
+
+            ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(padL, zeroY + 0.5); ctx.lineTo(cssW - padR, zeroY + 0.5); ctx.stroke();
+
+            const step = Math.ceil(buckets.length / 6);
+            ctx.fillStyle = '#999'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+            buckets.forEach((b, i) => {
+                if (i % step === 0) ctx.fillText(b.label, padL + i * bw + bw / 2, cssH - 6);
+            });
+
+            const vals = buckets.map(b => b.value);
+            const maxV = Math.max(...vals), minV = Math.min(...vals);
+            ctx.font = '10px sans-serif';
+            if (maxV > 0) { ctx.fillStyle = '#00c853'; ctx.textAlign = 'left'; ctx.fillText('峰值 ¥' + maxV.toFixed(0), padL, 11); }
+            if (minV < 0) { ctx.fillStyle = '#ff1744'; ctx.textAlign = 'right'; ctx.fillText('低谷 ¥' + minV.toFixed(0), cssW - padR, 11); }
+        }
+
+        function renderStockMix() {
+            const arr = Object.values(appData.products)
+                .map(p => ({ name: p.name, v: p.stock * p.cost }))
+                .filter(x => x.v > 0.0001)
+                .sort((a, b) => b.v - a.v);
+            const box = document.getElementById('stockRankBox');
+            if (!arr.length) { box.innerHTML = emptyHtml('暂无库存'); return; }
+            const total = arr.reduce((s, x) => s + x.v, 0);
+            const top = arr.slice(0, 5);
+            let html = top.map(x =>
+                barRowHTML(esc(x.name), `¥${x.v.toFixed(0)}｜${(x.v / total * 100).toFixed(0)}%`, x.v / arr[0].v * 100, 'blue')
+            ).join('');
+            if (arr.length > 5) {
+                const restVal = total - top.reduce((s, x) => s + x.v, 0);
+                html += `<div class="trend-summary">其余 ${arr.length - 5} 种商品合计 ¥${restVal.toFixed(2)}</div>`;
+            }
+            html += `<div class="trend-summary">库存总价值: ¥${total.toFixed(2)}</div>`;
+            box.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
