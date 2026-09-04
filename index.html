@@ -73,6 +73,16 @@
         .stock-del { display: inline-block; margin-top: 5px; font-size: 0.72rem; color: var(--danger); background: rgba(255,23,68,0.08); border-radius: 4px; padding: 2px 8px; text-decoration: none; cursor: pointer; }
         .stock-del:hover { background: rgba(255,23,68,0.15); }
 
+        /* 采购待收货清单 */
+        .purchase-item { display: flex; align-items: center; gap: 10px; background: #fcfcfc; border: 1px solid #eee; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
+        .purchase-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; background: transparent; }
+        .purchase-item.arrived { background: #f6fbf7; border-color: #cdeccd; }
+        .purchase-item.arrived .purchase-check { background: var(--success); border-color: var(--success); }
+        .purchase-info { flex: 1; min-width: 0; }
+        .purchase-info h4 { margin: 0; font-size: 0.95rem; }
+        .purchase-info p { margin: 2px 0 0; font-size: 0.75rem; color: #999; }
+        .purchase-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
         .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #eee; border-radius: var(--radius); z-index: 10; max-height: 404px; overflow-y: auto; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 4px; }
         .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; display: flex; justify-content: space-between; align-items: center; }
         .suggestion-item:hover { background-color: #f0f0f0; }
@@ -204,6 +214,47 @@
             #page-home.active { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
             .record-item:hover { background: #fdf7f7; }
         }
+
+        /* ==================== 收货核销 / 快递单号（新增） ==================== */
+        .scan-box { background: #f0f7ff; border: 1px solid #cfe4fb; border-radius: var(--radius); padding: 12px; margin: 15px 0 10px; }
+        .scan-title { font-size: 0.85rem; font-weight: bold; color: var(--info); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .scan-row { display: flex; gap: 8px; }
+        .scan-row input { flex: 1; min-width: 0; background: #fff; }
+        .btn-scan { padding: 0 14px; background: var(--info); color: #fff; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: bold; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+        .btn-scan:active { opacity: 0.8; }
+        .scan-hint { font-size: 0.72rem; color: #888; margin-top: 6px; line-height: 1.6; }
+        .scan-opt { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #666; margin-top: 8px; cursor: pointer; }
+        .scan-opt input { width: auto; }
+        #scanResult { display: none; margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: #fff; border: 1px solid #eee; font-size: 0.8rem; font-weight: bold; line-height: 1.5; word-break: break-all; }
+
+        .pur-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+        .pur-toolbar .btn-sm { margin-top: 0; }
+        .pur-toolbar select { padding: 6px 10px; border-radius: 6px; border: 1px solid #eee; width: auto; font-size: 0.8rem; background: #fff; }
+
+        .order-group { border: 1px solid #eee; border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; background: #fff; }
+        .order-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+        .order-head.done { background: #f2faf4; }
+        .order-title { font-size: 0.82rem; font-weight: bold; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .order-prog { font-size: 0.72rem; color: #999; flex-shrink: 0; }
+        .order-head.done .order-prog { color: var(--success); font-weight: bold; }
+        .order-body { padding: 8px 10px 2px; }
+        .order-body .purchase-item:last-child { margin-bottom: 8px; }
+        .order-body.flat { padding: 0; }
+
+        .track-tag { display: inline-block; font-size: 0.68rem; background: rgba(33,150,243,0.1); color: var(--info); border-radius: 4px; padding: 1px 6px; margin-top: 4px; }
+        .courier-tag { display: inline-block; font-size: 0.68rem; background: rgba(156,39,176,0.1); color: var(--purple); border-radius: 4px; padding: 1px 6px; margin-top: 4px; margin-right: 4px; }
+
+        .lock-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #666; margin: -6px 0 12px; cursor: pointer; }
+        .lock-row input { width: auto; }
+        .lock-row label { margin: 0; color: #666; }
+
+        .video-wrap { position: relative; width: 100%; background: #000; border-radius: var(--radius); overflow: hidden; }
+        #scanVideo { width: 100%; display: block; height: 240px; object-fit: cover; }
+        .scan-line { position: absolute; left: 8%; right: 8%; top: 50%; height: 2px; background: var(--success); box-shadow: 0 0 8px var(--success); animation: scanMove 1.6s infinite ease-in-out; }
+        @keyframes scanMove { 0%,100% { top: 28%; } 50% { top: 72%; } }
+
+        .nav-badge { display: none; position: absolute; top: 2px; right: 50%; margin-right: -26px; background: var(--danger); color: #fff; font-size: 0.58rem; line-height: 1; padding: 2px 5px; border-radius: 9px; font-weight: bold; }
+        @media (min-width: 768px) { .nav-badge { position: static; margin: 0 0 0 auto; font-size: 0.62rem; padding: 2px 7px; } }
     </style>
 </head>
 <body>
@@ -297,6 +348,77 @@
         </div>
 
         <div id="page-in" class="page">
+            <div class="card">
+                <div class="card-header">📋 采购待收货 <span id="purchaseProgress" style="font-size: 0.8rem; color: #999; font-weight: normal;"></span></div>
+                <div class="sync-status" style="margin: -8px 0 12px; text-align: left;">💡 网购下单后先记在这里，到货一件勾一件，全部到货后点"入库"转入库存</div>
+                <form id="formPurchase">
+                    <div class="form-group">
+                        <label>商品名称 (点击选择已有商品)</label>
+                        <div class="input-wrapper select-wrapper has-dd">
+                            <input type="text" id="purName" placeholder="选择或输入要采购的商品..." autocomplete="off" onfocus="showSuggestions('pur')">
+                            <span class="dd-arrow" onclick="ddTap('pur')">▼</span>
+                            <div id="purSuggestions" class="suggestions"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>数量</label>
+                            <input type="number" id="purQty" placeholder="0" min="1">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>进货单价 (选填)</label>
+                            <input type="number" id="purCost" placeholder="0.00" step="0.01">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>订单号 (选填)</label>
+                            <input type="text" id="purOrder" placeholder="例如：JD12345678">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>快递公司 (选填)</label>
+                            <input type="text" id="purCourier" placeholder="例如：京东物流">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>快递单号 (选填 · 用于扫码核销)</label>
+                        <input type="text" id="purTracking" placeholder="签收时扫一下即自动核销">
+                    </div>
+                    <div class="form-group">
+                        <label>备注 (店铺/其他)</label>
+                        <input type="text" id="purNote" placeholder="例如：京东自营店">
+                    </div>
+                    <div class="lock-row" onclick="event.preventDefault(); document.getElementById('purLock').checked = !document.getElementById('purLock').checked;">
+                        <input type="checkbox" id="purLock" onclick="event.stopPropagation();">
+                        <span>同一订单连续录入（保留订单号 / 快递单号）</span>
+                    </div>
+                    <button type="submit" class="btn btn-outline" style="margin-top: 0;">➕ 加入待收货</button>
+                </form>
+
+                <div class="scan-box">
+                    <div class="scan-title">📷 扫码签收核销</div>
+                    <div class="scan-row">
+                        <input type="text" id="scanInput" placeholder="扫快递单号 / 手动输入后回车" autocomplete="off">
+                        <button type="button" class="btn-scan" onclick="startCameraScan()">📷 扫</button>
+                    </div>
+                    <div id="scanResult"></div>
+                    <label class="scan-opt"><input type="checkbox" id="autoStockOnScan"> 核销后自动入库（需已填进货单价）</label>
+                    <div class="scan-hint">💡 支持三种方式：① 扫码枪/蓝牙扫描器直接扫 ② 点"扫"用摄像头识别 ③ 手动输入单号后回车。一个单号对应多件商品时，扫一次整单核销。</div>
+                </div>
+
+                <div class="pur-toolbar">
+                    <select id="purFilter" onchange="renderPurchases()">
+                        <option value="all">全部</option>
+                        <option value="todo">仅未收货</option>
+                        <option value="done">仅已收货</option>
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="markAllArrived()">✅ 全部标记已收</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="stockAllArrived()">📦 已收货全部入库</button>
+                </div>
+
+                <div id="purchaseList" class="record-list" style="margin-top: 15px;"></div>
+            </div>
+
             <div class="card">
                 <div class="card-header">📦 商品入库</div>
                 <form id="formIn">
@@ -656,7 +778,7 @@
     <nav class="side-nav">
         <div class="side-logo">🛒 拼多多经营助手</div>
         <div class="nav-item active" id="side-home" onclick="switchTab('home', this)"><span class="nav-icon">📊</span> 经营概览</div>
-        <div class="nav-item" id="side-in" onclick="switchTab('in', this)"><span class="nav-icon">📦</span> 商品入库</div>
+        <div class="nav-item" id="side-in" onclick="switchTab('in', this)"><span class="nav-icon">📦</span> 商品入库<span id="purBadgeSide" class="nav-badge"></span></div>
         <div class="nav-item" id="side-out" onclick="switchTab('out', this)"><span class="nav-icon">🛒</span> 商品出单</div>
         <div class="nav-item" id="side-return" onclick="switchTab('return', this)"><span class="nav-icon">🔄</span> 退货退款</div>
         <div class="nav-item" id="side-ship" onclick="switchTab('ship', this)"><span class="nav-icon">💰</span> 费用报销</div>
@@ -670,9 +792,10 @@
             <span class="nav-icon">📊</span>
             首页
         </div>
-        <div class="nav-item" onclick="switchTab('in', this)">
+        <div class="nav-item" onclick="switchTab('in', this)" style="position: relative;">
             <span class="nav-icon">📦</span>
             入库
+            <span id="purBadge" class="nav-badge"></span>
         </div>
         <div class="nav-item" onclick="switchTab('out', this)">
             <span class="nav-icon">🛒</span>
@@ -695,6 +818,20 @@
             管理
         </div>
     </nav>
+
+    <div id="scanModal" class="modal-overlay" onclick="if(event.target===this) stopCameraScan()">
+        <div class="modal" style="max-width: 420px;">
+            <h3 style="margin-bottom: 12px;">📷 扫描快递单号</h3>
+            <div class="video-wrap">
+                <video id="scanVideo" autoplay playsinline muted></video>
+                <div class="scan-line"></div>
+            </div>
+            <div id="scanModalMsg" class="scan-hint" style="text-align: center; font-size: 0.8rem; color: #555;">正在启动摄像头…</div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" style="margin-top: 0; width: auto; padding: 8px 20px;" onclick="stopCameraScan()">关闭</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         let appData = {
@@ -828,6 +965,7 @@
             }
             if (!appData.products) appData.products = {};
             if (!appData.records) appData.records = [];
+            if (!appData.purchases) appData.purchases = [];
             if (!appData.updatedAt) appData.updatedAt = 1;
         }
 
@@ -967,6 +1105,7 @@
             appData = cloud;
             if (!appData.products) appData.products = {};
             if (!appData.records) appData.records = [];
+            if (!appData.purchases) appData.purchases = [];
             appData.isSeed = false;
             saveData();
             lastCloudUpdatedAt = appData.updatedAt; // saveData 已重新盖章，视为已同步，不再回推
@@ -1438,6 +1577,464 @@
             document.getElementById('totalFee').innerText = `¥${feeTotal.toFixed(2)}`;
         }
 
+        /* ==================== 采购待收货清单 ==================== */
+
+        document.getElementById('formPurchase').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('purName').value.trim();
+            const qty = parseFloat(document.getElementById('purQty').value) || 0;
+            const cost = parseFloat(document.getElementById('purCost').value) || 0;
+            const note = document.getElementById('purNote').value.trim();
+            const elOrder = document.getElementById('purOrder');
+            const elCourier = document.getElementById('purCourier');
+            const elTrack = document.getElementById('purTracking');
+            const orderNo = elOrder ? elOrder.value.trim() : '';
+            const courier = elCourier ? elCourier.value.trim() : '';
+            const trackingNo = elTrack ? elTrack.value.trim() : '';
+            // 表单 reset 会清掉勾选状态，必须在 reset 前先读出来
+            const lock = document.getElementById('purLock');
+            const keepLock = lock ? !!lock.checked : false;
+            if (lock) { try { localStorage.setItem('pddPurLock', keepLock ? '1' : '0'); } catch (e) {} }
+            if (!name) { alert('请输入商品名称'); return; }
+            if (qty <= 0) { alert('请输入有效的数量'); return; }
+            if (!appData.purchases) appData.purchases = [];
+            appData.purchases.unshift({
+                id: genId(), name, qty, cost, note,
+                orderNo, courier, trackingNo,
+                arrived: false,
+                createdAt: new Date().toISOString()
+            });
+            saveData();
+            e.target.reset();
+            if (lock) lock.checked = keepLock;
+            if (keepLock && elOrder) {
+                elOrder.value = orderNo;
+                if (elCourier) elCourier.value = courier;
+                if (elTrack) elTrack.value = trackingNo;
+                document.getElementById('purName').focus();
+            }
+            renderPurchases();
+            showToast('已加入待收货清单');
+        });
+
+        function toggleArrived(id) {
+            const p = (appData.purchases || []).find(x => String(x.id) === String(id));
+            if (!p) return;
+            p.arrived = !p.arrived;
+            if (p.arrived) p.arrivedAt = new Date().toISOString();
+            saveData();
+            renderPurchases();
+        }
+
+        function delPurchase(id) {
+            if (!confirm('确定从待收货清单删除吗？')) return;
+            appData.purchases = (appData.purchases || []).filter(x => String(x.id) !== String(id));
+            saveData();
+            renderPurchases();
+            showToast('已删除');
+        }
+
+        // 已收货的商品转入库存：填过单价则直接入库，否则预填入库表单补成本
+        function receiveToStock(id) {
+            const p = (appData.purchases || []).find(x => String(x.id) === String(id));
+            if (!p) return;
+            appData.purchases = appData.purchases.filter(x => String(x.id) !== String(id));
+
+            if (p.cost > 0) {
+                const key = p.name.toLowerCase();
+                if (!appData.products[key]) appData.products[key] = { name: p.name, cost: 0, stock: 0 };
+                const prod = appData.products[key];
+                const oldTotal = prod.stock * prod.cost;
+                const newTotal = p.qty * p.cost;
+                const newStock = prod.stock + p.qty;
+                if (newStock > 0) prod.cost = (oldTotal + newTotal) / newStock;
+                prod.stock = newStock;
+                addRecord('in', { name: p.name, cost: p.cost, qty: p.qty });
+                showToast('已入库: ' + p.name + ' × ' + p.qty);
+                renderPurchases();
+            } else {
+                saveData();
+                switchInMode('unit');
+                document.getElementById('inName').value = p.name;
+                document.getElementById('inQty').value = p.qty;
+                document.getElementById('displayCost').innerText = '0.00';
+                renderPurchases();
+                showToast('已填入入库表单，请补充成本价后确认');
+                document.getElementById('inCost').focus();
+            }
+        }
+
+        function purchaseItemHTML(p) {
+            const tags = [];
+            if (p.courier) tags.push('<span class="courier-tag">🚚 ' + esc(p.courier) + '</span>');
+            if (p.trackingNo) tags.push('<span class="track-tag">📦 ' + esc(p.trackingNo) + '</span>');
+            return `
+                <div class="purchase-item ${p.arrived ? 'arrived' : ''}">
+                    <div class="purchase-check" onclick="toggleArrived('${p.id}')">${p.arrived ? '✓' : ''}</div>
+                    <div class="purchase-info">
+                        <h4>${esc(p.name)} × ${p.qty}</h4>
+                        <p>${p.arrived ? '✅ 已收货' : '⏳ 待收货'}${p.cost > 0 ? ' ｜ 单价¥' + p.cost.toFixed(2) : ''}${p.note ? ' ｜ ' + esc(p.note) : ''}${p.arrivedAt ? ' ｜ ' + fmtTime(p.arrivedAt) : ''}</p>
+                        ${tags.length ? '<div>' + tags.join('') + '</div>' : ''}
+                    </div>
+                    <div class="purchase-actions">
+                        ${p.arrived ? `<a href="javascript:void(0)" class="action-link" style="color: var(--success); background: rgba(0,200,83,0.12);" onclick="receiveToStock('${p.id}')">入库</a>` : ''}
+                        <a href="javascript:void(0)" class="action-link delete" onclick="delPurchase('${p.id}')">删</a>
+                    </div>
+                </div>`;
+        }
+
+        function renderPurchases() {
+            const box = document.getElementById('purchaseList');
+            if (!box) return;
+            if (!appData.purchases) appData.purchases = [];
+            const all = appData.purchases;
+            const arrived = all.filter(p => p.arrived).length;
+            const prog = document.getElementById('purchaseProgress');
+            if (prog) prog.innerText = all.length ? (all.length === arrived ? '✅ 全部到货 ' + arrived + '/' + all.length : '已收 ' + arrived + '/' + all.length) : '';
+            updatePurBadge(all.length - arrived);
+
+            if (!all.length) {
+                box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">暂无待收货商品</div>';
+                return;
+            }
+            const fEl = document.getElementById('purFilter');
+            const f = fEl ? fEl.value : 'all';
+            const list = f === 'todo' ? all.filter(p => !p.arrived) : (f === 'done' ? all.filter(p => p.arrived) : all);
+            if (!list.length) {
+                box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">没有符合条件的商品</div>';
+                return;
+            }
+
+            // 按订单号分组；没填订单号的独立显示
+            const groups = [];
+            const map = {};
+            list.forEach(p => {
+                const on = (p.orderNo || '').trim();
+                const k = on ? 'O:' + on : 'S:' + p.id;
+                if (!map[k]) {
+                    map[k] = { orderNo: on, isSingle: !on, items: [] };
+                    groups.push(map[k]);
+                }
+                map[k].items.push(p);
+            });
+            groups.sort((a, b) => {
+                const ad = a.items.every(p => p.arrived) ? 1 : 0;
+                const bd = b.items.every(p => p.arrived) ? 1 : 0;
+                if (ad !== bd) return ad - bd;
+                return String(b.items[0].createdAt || '').localeCompare(String(a.items[0].createdAt || ''));
+            });
+
+            box.innerHTML = groups.map(g => {
+                if (g.isSingle) {
+                    return '<div class="order-body flat">' + g.items.map(purchaseItemHTML).join('') + '</div>';
+                }
+                const done = g.items.filter(p => p.arrived).length;
+                const total = g.items.length;
+                const allDone = done === total;
+                const canStock = allDone && g.items.every(p => p.cost > 0);
+                const btnText = canStock ? '整单入库' : (allDone ? '补价入库' : '整单签收');
+                return `
+                <div class="order-group">
+                    <div class="order-head ${allDone ? 'done' : ''}">
+                        <span class="order-title">🧾 订单 ${esc(g.orderNo)}</span>
+                        <span class="order-prog">${allDone ? '✅ 全部到货 ' : ''}${done}/${total}</span>
+                        <a href="javascript:void(0)" class="action-link" style="font-size: 0.72rem; padding: 2px 7px; ${canStock ? 'color: var(--success); background: rgba(0,200,83,0.12);' : ''}" data-order="${esc(g.orderNo)}" onclick="receiveOrder(this.getAttribute('data-order'))">${btnText}</a>
+                    </div>
+                    <div class="order-body">${g.items.map(purchaseItemHTML).join('')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function updatePurBadge(pending) {
+            const n = typeof pending === 'number' ? pending : (appData.purchases || []).filter(p => !p.arrived).length;
+            ['purBadge', 'purBadgeSide'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (n > 0) { el.style.display = ''; el.innerText = n > 99 ? '99+' : String(n); }
+                else { el.style.display = 'none'; el.innerText = ''; }
+            });
+        }
+
+        /* ==================== 收货核销 · 快递单号 ==================== */
+
+        function fmtTime(iso) {
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            return (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+                   String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+
+        function normTrack(s) {
+            return String(s == null ? '' : s).toUpperCase().replace(/[\s\-_]/g, '');
+        }
+
+        function playBeep(ok) {
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) return;
+                const ctx = new AC();
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.type = 'square';
+                o.frequency.value = ok ? 920 : 260;
+                g.gain.setValueAtTime(0.07, ctx.currentTime);
+                o.start();
+                o.stop(ctx.currentTime + (ok ? 0.12 : 0.32));
+                setTimeout(() => { try { ctx.close(); } catch (e) {} }, 600);
+            } catch (e) {}
+        }
+
+        function vibrate(pattern) {
+            try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+        }
+
+        function showScanResult(msg, ok) {
+            const el = document.getElementById('scanResult');
+            if (!el) return;
+            el.innerText = msg;
+            el.style.color = ok ? '#00a844' : '#ff1744';
+            el.style.borderColor = ok ? '#cdeccd' : '#ffcdd2';
+            el.style.background = ok ? '#f6fbf7' : '#fff5f6';
+            el.style.display = 'block';
+            clearTimeout(showScanResult._t);
+            showScanResult._t = setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // 静默写一条记录（批量入库时用，避免每条都弹提示）
+        function addRecordSilent(type, data) {
+            appData.records.unshift(Object.assign({
+                id: genId(), type: type, timestamp: new Date().toISOString()
+            }, data));
+            appData.isSeed = false;
+        }
+
+        // 单条已收货商品转入库存，成功返回 true
+        function stockOnePurchase(p) {
+            if (!p || !(p.cost > 0)) return false;
+            const key = p.name.toLowerCase();
+            if (!appData.products[key]) appData.products[key] = { name: p.name, cost: 0, stock: 0 };
+            const prod = appData.products[key];
+            const oldTotal = prod.stock * prod.cost;
+            const newTotal = p.qty * p.cost;
+            const newStock = prod.stock + p.qty;
+            if (newStock > 0) prod.cost = (oldTotal + newTotal) / newStock;
+            prod.stock = newStock;
+            addRecordSilent('in', { name: p.name, cost: p.cost, qty: p.qty });
+            return true;
+        }
+
+        function findByTracking(key) {
+            const list = appData.purchases || [];
+            let hit = list.filter(p => p.trackingNo && normTrack(p.trackingNo) === key);
+            if (!hit.length && key.length >= 6) {
+                hit = list.filter(p => {
+                    if (!p.trackingNo) return false;
+                    const t = normTrack(p.trackingNo);
+                    if (t.length < 5) return false;
+                    return t.indexOf(key) >= 0 || (t.length >= 8 && key.indexOf(t) >= 0);
+                });
+            }
+            return hit;
+        }
+
+        function doScan() {
+            const el = document.getElementById('scanInput');
+            if (!el) return;
+            const raw = (el.value || '').trim();
+            if (!raw) return;
+            const key = normTrack(raw);
+            const hits = findByTracking(key);
+
+            if (!hits.length) {
+                playBeep(false); vibrate([60, 60, 60]);
+                showScanResult('❌ 清单里没有这个单号：' + raw + '\n（可手动勾选收货，或把它填到上方「快递单号」栏再录入商品）', false);
+                if (confirm('未找到匹配的待收货商品：\n' + raw + '\n\n要把这个单号填到上方「快递单号」栏吗？')) {
+                    const t = document.getElementById('purTracking');
+                    if (t) { t.value = raw; t.focus(); }
+                }
+                el.select();
+                return;
+            }
+
+            const todo = hits.filter(p => !p.arrived);
+            if (!todo.length) {
+                playBeep(false); vibrate([50, 50, 50]);
+                showScanResult('⚠️ 该单号已核销过了（' + hits.length + ' 件商品均已收货），请勿重复入库', false);
+                el.select();
+                return;
+            }
+
+            const now = new Date().toISOString();
+            todo.forEach(p => { p.arrived = true; p.arrivedAt = now; p.arrivedBy = 'scan'; });
+
+            let stocked = 0;
+            const autoEl = document.getElementById('autoStockOnScan');
+            if (autoEl && autoEl.checked) {
+                const ids = {};
+                todo.forEach(p => { if (stockOnePurchase(p)) { stocked++; ids[String(p.id)] = 1; } });
+                if (stocked) appData.purchases = (appData.purchases || []).filter(p => !ids[String(p.id)]);
+            }
+
+            saveData();
+            renderAllLists();
+            playBeep(true); vibrate(60);
+            const names = todo.map(p => p.name + ' ×' + p.qty).join('、');
+            showScanResult('✅ 核销成功（' + todo.length + ' 件）：' + names +
+                           (stocked ? '\n📦 已自动入库 ' + stocked + ' 件' : '\n👉 点右侧「入库」转入库存'), true);
+            el.value = '';
+            el.focus();
+        }
+
+        // 整单操作：未收齐→整单签收；已收齐且都有单价→整单入库
+        function receiveOrder(orderNo) {
+            const key = String(orderNo || '');
+            const items = (appData.purchases || []).filter(p => (p.orderNo || '').trim() === key);
+            if (!items.length) return;
+
+            const un = items.filter(p => !p.arrived);
+            if (un.length) {
+                if (!confirm('把订单「' + key + '」的 ' + un.length + ' 件商品全部标记为已收货？')) return;
+                const now = new Date().toISOString();
+                un.forEach(p => { p.arrived = true; p.arrivedAt = now; });
+                saveData(); renderPurchases();
+                showToast('✅ 整单签收 ' + un.length + ' 件');
+                return;
+            }
+
+            const noCost = items.filter(p => !(p.cost > 0));
+            if (noCost.length) {
+                const p0 = noCost[0];
+                switchInMode('unit');
+                document.getElementById('inName').value = p0.name;
+                document.getElementById('inQty').value = p0.qty;
+                document.getElementById('displayCost').innerText = '0.00';
+                showToast('还有 ' + noCost.length + ' 件未填单价，已填入入库表单');
+                document.getElementById('inCost').focus();
+                return;
+            }
+
+            if (!confirm('把订单「' + key + '」的 ' + items.length + ' 件商品全部入库？')) return;
+            const ids = {};
+            let n = 0;
+            items.forEach(p => { if (stockOnePurchase(p)) { n++; ids[String(p.id)] = 1; } });
+            appData.purchases = (appData.purchases || []).filter(p => !ids[String(p.id)]);
+            saveData(); renderAllLists();
+            showToast('✅ 已入库 ' + n + ' 件');
+        }
+
+        function markAllArrived() {
+            const un = (appData.purchases || []).filter(p => !p.arrived);
+            if (!un.length) { showToast('没有待收货的商品'); return; }
+            if (!confirm('把全部 ' + un.length + ' 件商品标记为已收货？')) return;
+            const now = new Date().toISOString();
+            un.forEach(p => { p.arrived = true; p.arrivedAt = now; });
+            saveData(); renderPurchases();
+            showToast('✅ 已标记 ' + un.length + ' 件');
+        }
+
+        function stockAllArrived() {
+            const done = (appData.purchases || []).filter(p => p.arrived);
+            if (!done.length) { showToast('没有已收货的商品'); return; }
+            const ok = done.filter(p => p.cost > 0);
+            if (!ok.length) { showToast('已收货商品都还没填单价，请先补价'); return; }
+            const skip = done.length - ok.length;
+            if (!confirm('把 ' + ok.length + ' 件已收货商品（已填单价）全部入库？' + (skip ? '\n未填单价的 ' + skip + ' 件会留在清单里。' : ''))) return;
+            const ids = {};
+            ok.forEach(p => { stockOnePurchase(p); ids[String(p.id)] = 1; });
+            appData.purchases = (appData.purchases || []).filter(p => !ids[String(p.id)]);
+            saveData(); renderAllLists();
+            showToast('✅ 已入库 ' + ok.length + ' 件');
+        }
+
+        /* ==================== 摄像头扫码 ==================== */
+        let scanStream = null, scanTimer = null, scanDetector = null, scanBusy = false;
+
+        async function startCameraScan() {
+            const camErr = (m) => { showScanResult('⚠️ ' + m + '\n可改用：扫码枪直接扫 / 手动输入单号后回车', false); document.getElementById('scanInput').focus(); };
+            if (!('BarcodeDetector' in window)) {
+                camErr('当前浏览器不支持摄像头扫码（推荐用手机 Chrome / 微信小程序环境打开）');
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                camErr('无法调用摄像头，需通过 https:// 或 localhost 打开页面');
+                return;
+            }
+            const modal = document.getElementById('scanModal');
+            const msg = document.getElementById('scanModalMsg');
+            modal.style.display = 'flex';
+            msg.innerText = '正在启动摄像头…';
+            try {
+                scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                const video = document.getElementById('scanVideo');
+                video.srcObject = scanStream;
+                await video.play();
+                let formats;
+                try { formats = await window.BarcodeDetector.getSupportedFormats(); } catch (e) { formats = undefined; }
+                scanDetector = formats ? new window.BarcodeDetector({ formats }) : new window.BarcodeDetector();
+                msg.innerText = '对准快递单上的条形码，识别后自动核销';
+                scanBusy = false;
+                clearInterval(scanTimer);
+                scanTimer = setInterval(tickScan, 300);
+            } catch (e) {
+                msg.innerText = '摄像头启动失败：' + (e && e.message ? e.message : e);
+            }
+        }
+
+        async function tickScan() {
+            if (scanBusy || !scanDetector) return;
+            const video = document.getElementById('scanVideo');
+            if (!video || video.readyState < 2) return;
+            scanBusy = true;
+            try {
+                const codes = await scanDetector.detect(video);
+                if (codes && codes.length) {
+                    const val = String(codes[0].rawValue || '').trim();
+                    if (val) {
+                        stopCameraScan();
+                        const si = document.getElementById('scanInput');
+                        if (si) { si.value = val; doScan(); }
+                    }
+                }
+            } catch (e) {}
+            scanBusy = false;
+        }
+
+        function stopCameraScan() {
+            clearInterval(scanTimer); scanTimer = null; scanDetector = null; scanBusy = false;
+            if (scanStream) { try { scanStream.getTracks().forEach(t => t.stop()); } catch (e) {} scanStream = null; }
+            const v = document.getElementById('scanVideo');
+            if (v) { try { v.pause(); } catch (e) {} v.srcObject = null; }
+            const modal = document.getElementById('scanModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const si = document.getElementById('scanInput');
+            const lockEl = document.getElementById('purLock');
+            if (si) {
+                si.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); doScan(); }
+                });
+            }
+            const auto = document.getElementById('autoStockOnScan');
+            if (auto) {
+                auto.checked = localStorage.getItem('pddAutoStockOnScan') === '1';
+                auto.addEventListener('change', (e) => { try { localStorage.setItem('pddAutoStockOnScan', e.target.checked ? '1' : '0'); } catch (err) {} });
+            }
+            if (lockEl) lockEl.checked = localStorage.getItem('pddPurLock') === '1';
+            // 停留在「入库」页时，扫码枪直接输入也能落到单号框
+            document.addEventListener('keydown', (e) => {
+                const page = document.getElementById('page-in');
+                if (!page || !page.classList.contains('active')) return;
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+                const tag = (e.target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+                if (document.getElementById('scanModal').style.display === 'flex') return;
+                if (/^[0-9A-Za-z]$/.test(e.key) && si) si.focus();
+            });
+            updatePurBadge();
+        });
+
         function renderAllLists() {
             renderHomeList();
             renderTabList('listIn', 'in');
@@ -1445,6 +2042,7 @@
             renderTabList('listReturn', 'return');
             renderFeeList();
             renderStockList();
+            renderPurchases();
         }
 
         function getStockSort() {
@@ -1667,29 +2265,55 @@
             }
         }
 
+        // 各表单 → [商品名输入框 id, 下拉容器 id]
+        function ddIds(type) {
+            const map = {
+                in: ['inName', 'inSuggestions'],
+                out: ['outName', 'outSuggestions'],
+                return: ['retName', 'retSuggestions'],
+                pur: ['purName', 'purSuggestions']
+            };
+            return map[type] || map.in;
+        }
+
+        // 选中某个商品后的附加动作
+        function afterPickProduct(type, p) {
+            if (type === 'out') {
+                const c = document.getElementById('outCost');
+                if (c) c.value = p.cost.toFixed(2);
+            } else if (type === 'pur') {
+                // 采购：单价为空时，用库存均价预填，可随时改
+                const c = document.getElementById('purCost');
+                if (c && !String(c.value).trim()) c.value = p.cost.toFixed(2);
+            }
+        }
+
         // 点下拉三角形：只弹商品列表，不聚焦输入框（不弹键盘）
         function ddTap(type) {
-            const inputId = type === 'in' ? 'inName' : (type === 'out' ? 'outName' : 'retName');
-            const boxId = type === 'in' ? 'inSuggestions' : (type === 'out' ? 'outSuggestions' : 'retSuggestions');
+            const [inputId, boxId] = ddIds(type);
             const input = document.getElementById(inputId);
             const box = document.getElementById(boxId);
+            if (!input || !box) return;
             if (box.style.display === 'block') { box.style.display = 'none'; return; }
             showSuggestions(type);
             if (document.activeElement === input) input.blur();
         }
 
         function showSuggestions(type) {
-            const inputId = type === 'in' ? 'inName' : (type === 'out' ? 'outName' : 'retName');
-            const boxId = type === 'in' ? 'inSuggestions' : (type === 'out' ? 'outSuggestions' : 'retSuggestions');
+            const [inputId, boxId] = ddIds(type);
             const input = document.getElementById(inputId);
             const box = document.getElementById(boxId);
-            
+            if (!input || !box) return;
+
             let keys = Object.keys(appData.products).sort();
             // 出单只能选有库存的商品
             if (type === 'out') keys = keys.filter(k => appData.products[k].stock > 0.0001);
             if (keys.length === 0) {
                 if (type === 'out') {
                     box.innerHTML = '<div class="suggestion-empty">暂无有库存的商品，请先入库</div>';
+                    box.style.display = 'block';
+                } else if (type === 'pur') {
+                    box.innerHTML = '<div class="suggestion-empty">管理里还没有商品，可先直接输入名称</div>';
                     box.style.display = 'block';
                 } else {
                     box.style.display = 'none';
@@ -1706,19 +2330,21 @@
                 div.onclick = () => {
                     input.value = p.name;
                     box.style.display = 'none';
-                    if (type === 'out') document.getElementById('outCost').value = p.cost.toFixed(2);
+                    afterPickProduct(type, p);
                 };
                 box.appendChild(div);
             });
             box.style.display = 'block';
         }
-        
-        ['in', 'out', 'return'].forEach(type => {
-            const inputId = type === 'in' ? 'inName' : (type === 'out' ? 'outName' : 'retName');
-            const boxId = type === 'in' ? 'inSuggestions' : (type === 'out' ? 'outSuggestions' : 'retSuggestions');
-            document.getElementById(inputId).addEventListener('input', function() {
+
+        ['in', 'out', 'return', 'pur'].forEach(type => {
+            const [inputId, boxId] = ddIds(type);
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            input.addEventListener('input', function() {
                 const val = this.value.toLowerCase();
                 const box = document.getElementById(boxId);
+                if (!box) return;
                 if (!val) { showSuggestions(type); return; }
                 let matches = Object.keys(appData.products).filter(k => k.includes(val));
                 if (type === 'out') matches = matches.filter(k => appData.products[k].stock > 0.0001);
@@ -1732,13 +2358,16 @@
                         div.onclick = () => {
                             document.getElementById(inputId).value = p.name;
                             box.style.display = 'none';
-                            if (type === 'out') document.getElementById('outCost').value = p.cost.toFixed(2);
+                            afterPickProduct(type, p);
                         };
                         box.appendChild(div);
                     });
                     box.style.display = 'block';
                 } else if (type === 'out') {
                     box.innerHTML = '<div class="suggestion-empty">没有匹配的有库存商品</div>';
+                    box.style.display = 'block';
+                } else if (type === 'pur') {
+                    box.innerHTML = '<div class="suggestion-empty">没有匹配的商品，可直接输入新名字</div>';
                     box.style.display = 'block';
                 } else { box.style.display = 'none'; }
             });
@@ -1780,6 +2409,7 @@
                         appData = json;
                         if (!appData.products) appData.products = {};
                         if (!appData.records) appData.records = [];
+                        if (!appData.purchases) appData.purchases = [];
                         appData.isSeed = false;
                         localStorage.setItem('pddSeeded', '1');
                         saveData();
@@ -1794,7 +2424,7 @@
         function clearAllData() {
             if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
             if (!confirm('再次确认：所有商品与记录都会被删除！建议先"备份JSON"或导出CSV。\n（若已开启云同步，清空结果也会同步到云端）')) return;
-            appData = { products: {}, records: [], isSeed: false };
+            appData = { products: {}, records: [], purchases: [], isSeed: false };
             localStorage.setItem('pddSeeded', '1');
             saveData();
             renderAllLists();
