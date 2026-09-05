@@ -78,6 +78,9 @@
         .purchase-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; background: transparent; }
         .purchase-item.arrived { background: #f6fbf7; border-color: #cdeccd; }
         .purchase-item.arrived .purchase-check { background: var(--success); border-color: var(--success); }
+        .purchase-item.stocked { background: #f4f6fb; border-color: #dde3ee; opacity: 0.82; }
+        .purchase-item.stocked .purchase-check { background: #8a94a6; border-color: #8a94a6; }
+        .purchase-item.stocked h4 { color: #6b7488; text-decoration: line-through; text-decoration-color: #c2c9d6; }
         .purchase-info { flex: 1; min-width: 0; }
         .purchase-info h4 { margin: 0; font-size: 0.95rem; }
         .purchase-info p { margin: 2px 0 0; font-size: 0.75rem; color: #999; }
@@ -216,6 +219,13 @@
         }
 
         /* ==================== 收货核销 / 快递单号（新增） ==================== */
+        /* iOS「主屏网页 App」(standalone) 模式警告横幅 */
+        .standalone-warn { position: relative; max-width: 900px; margin: 0 auto 12px; padding: 12px 14px; background: #fff8e1; border: 1px solid #ffd54f; border-left: 5px solid #ff9800; border-radius: var(--radius); font-size: 0.82rem; line-height: 1.65; color: #6d4c00; }
+        .standalone-warn .sw-title { font-weight: bold; font-size: 0.92rem; margin-bottom: 6px; color: #e65100; }
+        .standalone-warn p { margin: 5px 0; }
+        .standalone-warn .sw-fix { margin-top: 8px; padding: 8px 10px; background: #fffde7; border-radius: 6px; border: 1px solid #ffe082; }
+        .sw-close { margin-top: 9px; padding: 6px 16px; background: #ff9800; color: #fff; border: none; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: bold; }
+        .sw-close:active { background: #ef6c00; }
         .scan-box { background: #f0f7ff; border: 1px solid #cfe4fb; border-radius: var(--radius); padding: 12px; margin: 15px 0 10px; }
         .scan-title { font-size: 0.85rem; font-weight: bold; color: var(--info); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
         .scan-row { display: flex; gap: 8px; }
@@ -268,6 +278,16 @@
 <body data-page-node-id="AK4Qj1O4KpcLcO1IQe3QN3">
 
     <div id="toast" class="toast" data-page-node-id="iYZiAKZaJdLSRKVTUFozvJ">操作成功</div>
+
+    <!-- 仅 iOS「主屏网页 App」模式显示：该模式存储与 Safari 隔离 + 摄像头有系统级 Bug -->
+    <div id="standaloneWarn" class="standalone-warn" style="display:none;">
+        <div class="sw-title">⚠️ 你正在用「主屏幕图标」打开（网页 App 模式）</div>
+        <p>苹果在这个模式下有两个已知问题，会直接影响你的账本：</p>
+        <p><b>1. 数据和 Safari 里的不互通</b> —— 在这里录的单子，用 Safari 打开看不到；反过来也一样。两个地方各存一份，账会记乱。</p>
+        <p><b>2. 摄像头扫码经常失败</b> —— 苹果系统的 Bug（WebKit #282327），重启手机能好一阵但会复现。</p>
+        <p class="sw-fix">✅ <b>推荐做法</b>：用 <b>Safari 打开本页</b>加个书签，数据和扫码都正常。<br>如果就想用这个全屏图标，扫码请一律用「🖼️ 选图」拍照识别 —— 它不依赖摄像头，稳定可用。</p>
+        <button type="button" class="sw-close" onclick="this.parentElement.style.display='none'">我知道了</button>
+    </div>
 
     <div class="dashboard" data-page-node-id="NbTlhkI0zbAQ06SfZ5L25e">
         <div class="top-bar" data-page-node-id="99AaaCSdBeajv0JlEVpOGr">
@@ -390,7 +410,7 @@
                     </div>
                     <div class="form-group" data-page-node-id="qaqICDc9rodpHRa1Ht7fm1">
                         <label data-page-node-id="JHTC8BVqFXZHK72bdccLCA">快递单号 (选填 · 用于扫码核销)</label>
-                        <input type="text" id="purTracking" placeholder="签收时扫一下即自动核销" data-page-node-id="ozgFDkrHAZ25H3buAMwz54">
+                        <input type="text" id="purTracking" placeholder="签收时扫一下即自动核销（面单上的 -1-1 不用填）" data-page-node-id="ozgFDkrHAZ25H3buAMwz54">
                     </div>
                     <div class="form-group" data-page-node-id="dQs8vF0SC8OmWORD1tTLin">
                         <label data-page-node-id="6CMvvAyA3qF06buqJcPNsh">备注 (店铺/其他)</label>
@@ -413,7 +433,7 @@
                     <input type="file" id="scanFile" accept="image/*" capture="environment" style="display:none;" data-page-node-id="3gycywXLp73rQEKERaDztX">
                     <div id="scanResult" data-page-node-id="pDEWrdp2zGorYECsEgdC37"></div>
                     <label class="scan-opt" data-page-node-id="K7othEZM68GQrqDVVo5z9p"><input type="checkbox" id="autoStockOnScan" data-page-node-id="Uel8hD7gDlrR0k6HsOBB2F"> 核销后自动入库（需已填进货单价）</label>
-                    <div class="scan-hint" data-page-node-id="cvPJAtxvNVXW5pVmXjNHW7">💡 支持四种方式：① 扫码枪/蓝牙扫描器 ② 点"扫"摄像头实时识别（Chrome / Edge / 安卓；iOS Safari 用 h5-qrcode 兼容）③ 点"选图"从相册/拍照识别 ④ 手动输入单号后回车。一个单号对应多件商品时，扫一次整单核销。</div>
+                    <div class="scan-hint" data-page-node-id="cvPJAtxvNVXW5pVmXjNHW7">💡 支持四种方式：① 扫码枪/蓝牙扫描器 ② 点"扫"摄像头实时识别（Chrome / Edge / 安卓；iOS Safari 用 h5-qrcode 兼容）③ 点"选图"从相册/拍照识别 ④ 手动输入单号后回车。一个单号对应多件商品时，扫一次整单核销。<br>📦 京东面单条码尾部的<b>件序号（如 -1-1、-2-3）会自动忽略</b>，录入时填不带后缀的单号即可，一票多件扫任意一个包裹都能对上。</div>
                 </div>
 
                 <div class="pur-toolbar" data-page-node-id="XjHDtVn8JgyGesXcEYz4GG">
@@ -421,6 +441,7 @@
                         <option value="all" data-page-node-id="DlxD1UJut4pqJPdvKSG7H9">全部</option>
                         <option value="todo" data-page-node-id="kPGOwvX3cpSTL5xHPfJ4Kq">仅未收货</option>
                         <option value="done" data-page-node-id="37GrxotgjobqRjLCQ3PWtL">仅已收货</option>
+                        <option value="stocked">📦 已入库（历史查询）</option>
                     </select>
                     <button type="button" class="btn btn-outline btn-sm" onclick="markAllArrived()" data-page-node-id="o6nvsweGfwNxemAUyFStLo">✅ 全部标记已收</button>
                     <button type="button" class="btn btn-outline btn-sm" onclick="stockAllArrived()" data-page-node-id="ebQiufDOVHKdvzEcvBc4HK">📦 已收货全部入库</button>
@@ -1672,7 +1693,9 @@
         function receiveToStock(id) {
             const p = (appData.purchases || []).find(x => String(x.id) === String(id));
             if (!p) return;
-            appData.purchases = appData.purchases.filter(x => String(x.id) !== String(id));
+            // 注意：这里不再从 purchases 里删除记录，只打 stocked 标记 ——
+            // 这样入库后仍可按快递单号回查进过什么货（用户明确要求）
+            if (p.stocked) { showToast('该商品已入库过了'); return; }
 
             if (p.cost > 0) {
                 const key = p.name.toLowerCase();
@@ -1684,6 +1707,9 @@
                 if (newStock > 0) prod.cost = (oldTotal + newTotal) / newStock;
                 prod.stock = newStock;
                 addRecord('in', { name: p.name, cost: p.cost, qty: p.qty });
+                p.stocked = true;
+                p.stockedAt = new Date().toISOString();
+                saveData();
                 showToast('已入库: ' + p.name + ' × ' + p.qty);
                 renderPurchases();
             } else {
@@ -1702,16 +1728,19 @@
             const tags = [];
             if (p.courier) tags.push('<span class="courier-tag">🚚 ' + esc(p.courier) + '</span>');
             if (p.trackingNo) tags.push('<span class="track-tag">📦 ' + esc(p.trackingNo) + '</span>');
+            const stateText = p.stocked ? '📦 已入库' : (p.arrived ? '✅ 已收货' : '⏳ 待收货');
+            const timeAt = p.stocked ? p.stockedAt : p.arrivedAt;
+            const timeTag = p.stocked ? '入库 ' : '';
             return `
-                <div class="purchase-item ${p.arrived ? 'arrived' : ''}">
+                <div class="purchase-item ${p.stocked ? 'stocked' : (p.arrived ? 'arrived' : '')}">
                     <div class="purchase-check" onclick="toggleArrived('${p.id}')">${p.arrived ? '✓' : ''}</div>
                     <div class="purchase-info">
                         <h4>${esc(p.name)} × ${p.qty}</h4>
-                        <p>${p.arrived ? '✅ 已收货' : '⏳ 待收货'}${p.cost > 0 ? ' ｜ 单价¥' + p.cost.toFixed(2) : ''}${p.note ? ' ｜ ' + esc(p.note) : ''}${p.arrivedAt ? ' ｜ ' + fmtTime(p.arrivedAt) : ''}</p>
+                        <p>${stateText}${p.cost > 0 ? ' ｜ 单价¥' + p.cost.toFixed(2) : ''}${p.note ? ' ｜ ' + esc(p.note) : ''}${timeAt ? ' ｜ ' + timeTag + fmtTime(timeAt) : ''}</p>
                         ${tags.length ? '<div>' + tags.join('') + '</div>' : ''}
                     </div>
                     <div class="purchase-actions">
-                        ${p.arrived ? `<a href="javascript:void(0)" class="action-link" style="color: var(--success); background: rgba(0,200,83,0.12);" onclick="receiveToStock('${p.id}')">入库</a>` : ''}
+                        ${(!p.stocked && p.arrived) ? `<a href="javascript:void(0)" class="action-link" style="color: var(--success); background: rgba(0,200,83,0.12);" onclick="receiveToStock('${p.id}')">入库</a>` : ''}
                         <a href="javascript:void(0)" class="action-link delete" onclick="delPurchase('${p.id}')">删</a>
                     </div>
                 </div>`;
@@ -1722,20 +1751,25 @@
             if (!box) return;
             if (!appData.purchases) appData.purchases = [];
             const all = appData.purchases;
-            const arrived = all.filter(p => p.arrived).length;
+            // 已入库的记录保留在 purchases 里（可按单号回查），但不再计入「待收货」进度和角标
+            const active = all.filter(p => !p.stocked);
+            const arrived = active.filter(p => p.arrived).length;
             const prog = document.getElementById('purchaseProgress');
-            if (prog) prog.innerText = all.length ? (all.length === arrived ? '✅ 全部到货 ' + arrived + '/' + all.length : '已收 ' + arrived + '/' + all.length) : '';
-            updatePurBadge(all.length - arrived);
+            if (prog) prog.innerText = active.length ? (active.length === arrived ? '✅ 全部到货 ' + arrived + '/' + active.length : '已收 ' + arrived + '/' + active.length) : '';
+            updatePurBadge(active.length - arrived);
 
-            if (!all.length) {
-                box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">暂无待收货商品</div>';
-                return;
-            }
             const fEl = document.getElementById('purFilter');
             const f = fEl ? fEl.value : 'all';
-            const list = f === 'todo' ? all.filter(p => !p.arrived) : (f === 'done' ? all.filter(p => p.arrived) : all);
+            let list;
+            if (f === 'stocked') list = all.filter(p => p.stocked);
+            else if (f === 'todo') list = active.filter(p => !p.arrived);
+            else if (f === 'done') list = active.filter(p => p.arrived);
+            else list = active;
+
             if (!list.length) {
-                box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">没有符合条件的商品</div>';
+                const empty = f === 'stocked' ? '还没有已入库的记录'
+                    : (all.length && !active.length ? '全部都已入库，切到「已入库」可查看历史' : '暂无待收货商品');
+                box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">' + empty + '</div>';
                 return;
             }
 
@@ -1802,6 +1836,58 @@
             return String(s == null ? '' : s).toUpperCase().replace(/[\s\-_]/g, '');
         }
 
+        // 生成同一单号的多种可能写法。
+        // 京东面单条码常带「件序号」后缀，如 JD0123456789-1-1（第1件/共1件），
+        // 一票多件时同一单号下会有 -1-3 / -2-3 / -3-3 三个码，扫任意一个都应认作同一票。
+        // 所以这里把各种后缀逐级削掉，让「录入值」和「扫码值」能落到同一个形式上。
+        function trackVariants(s) {
+            const raw = String(s == null ? '' : s).trim().toUpperCase();
+            if (!raw) return [];
+            const out = [];
+            const add = (v) => {
+                const n = normTrack(v);
+                if (n && n.length >= 4 && out.indexOf(n) < 0) out.push(n);
+            };
+            add(raw);
+            // 逐级剥离尾部序号：-1-1 → -1 → 裸单号
+            let r = raw;
+            const pair = /[-\s_]+\d+\s*[-\/]\s*\d+\s*$/;   // -1-1 / -1/3
+            const one = /[-\s_]+\d+\s*$/;                  // -1
+            for (let i = 0; i < 4; i++) {
+                if (pair.test(r)) { r = r.replace(pair, ''); add(r); continue; }
+                if (one.test(r)) { r = r.replace(one, ''); add(r); continue; }
+                break;
+            }
+            // 分段形式：取首段 / 末段 / 全拼（有些面单是「订单号-运单号」）
+            const segs = raw.split(/[-\s_\/]+/).filter(Boolean);
+            if (segs.length > 1) {
+                add(segs[segs.length - 1]);
+                add(segs[0]);
+                add(segs.join(''));
+            }
+            return out;
+        }
+
+        // 找清单里与扫码值最接近的单号，用于匹配失败时给用户提示（帮他对出差异）
+        function nearestTracking(raw) {
+            const list = appData.purchases || [];
+            const sv = trackVariants(raw);
+            if (!sv.length) return null;
+            let best = null, bestScore = 0;
+            list.forEach(p => {
+                if (!p.trackingNo) return;
+                trackVariants(p.trackingNo).forEach(v => {
+                    sv.forEach(s => {
+                        let n = 0;
+                        const len = Math.min(v.length, s.length);
+                        while (n < len && v[n] === s[n]) n++;
+                        if (n > bestScore) { bestScore = n; best = p.trackingNo; }
+                    });
+                });
+            });
+            return bestScore >= 6 ? best : null;
+        }
+
         function playBeep(ok) {
             try {
                 const AC = window.AudioContext || window.webkitAudioContext;
@@ -1857,18 +1943,38 @@
             return true;
         }
 
-        function findByTracking(key) {
+        // allowFuzzy=false 时只认「变体精确匹配」；allowFuzzy=true 才启用兜底的前缀/包含匹配。
+// 兜底匹配可能把 123456789 和 1234567890 这类前缀相同但实际不同的单号混为一谈，
+// 所以调用方拿到模糊结果后必须先让用户确认，不能直接核销。
+function findByTracking(rawInput, allowFuzzy) {
             const list = appData.purchases || [];
-            let hit = list.filter(p => p.trackingNo && normTrack(p.trackingNo) === key);
-            if (!hit.length && key.length >= 6) {
-                hit = list.filter(p => {
+            if (!list.length) return [];
+            const sv = trackVariants(rawInput);
+            if (!sv.length) return [];
+
+            // ① 变体精确匹配：扫码值的任一写法 == 录入值的任一写法
+            //    能正确处理京东 -1-1 / -2-3 件序号，也不怕 -1-1 被当成另一张单
+            const exact = list.filter(p => {
+                if (!p.trackingNo) return false;
+                const pv = trackVariants(p.trackingNo);
+                return pv.some(v => sv.indexOf(v) >= 0);
+            });
+            if (exact.length) return exact;
+
+            // ② 兜底：前缀/包含匹配，长度差 ≤ 4（需调用方二次确认）
+            if (allowFuzzy === false) return [];
+            const key = normTrack(rawInput);
+            if (key.length >= 6) {
+                const loose = list.filter(p => {
                     if (!p.trackingNo) return false;
                     const t = normTrack(p.trackingNo);
                     if (t.length < 5) return false;
-                    return t.indexOf(key) >= 0 || (t.length >= 8 && key.indexOf(t) >= 0);
+                    if (Math.abs(t.length - key.length) > 4) return false;
+                    return t.indexOf(key) >= 0 || key.indexOf(t) >= 0;
                 });
+                if (loose.length) return loose;
             }
-            return hit;
+            return [];
         }
 
         function doScan() {
@@ -1876,13 +1982,36 @@
             if (!el) return;
             const raw = (el.value || '').trim();
             if (!raw) return;
-            const key = normTrack(raw);
-            const hits = findByTracking(key);
+            // 先只认精确/变体匹配；匹配不到再试模糊匹配，但模糊结果必须经用户确认
+            let hits = findByTracking(raw, false);
+            let fuzzy = false;
+            if (!hits.length) {
+                hits = findByTracking(raw, true);
+                fuzzy = hits.length > 0;
+            }
+
+            // 模糊命中：单号只是长得像，不能贸然核销，先让用户拍板
+            if (fuzzy) {
+                const near0 = hits[0].trackingNo || '';
+                if (!confirm('清单里没有和「' + raw + '」一致的单号。\n\n' +
+                             '最接近的是：' + near0 + '\n\n' +
+                             '要按这个单号核销它的 ' + hits.length + ' 件商品吗？\n' +
+                             '（不确定就点「取消」，再去核对录入的单号）')) {
+                    showScanResult('已取消，未核销。请核对录入的快递单号：' + near0, false);
+                    el.select();
+                    return;
+                }
+            }
 
             if (!hits.length) {
                 playBeep(false); vibrate([60, 60, 60]);
-                showScanResult('❌ 清单里没有这个单号：' + raw + '\n（可手动勾选收货，或把它填到上方「快递单号」栏再录入商品）', false);
-                if (confirm('未找到匹配的待收货商品：\n' + raw + '\n\n要把这个单号填到上方「快递单号」栏吗？')) {
+                const near = nearestTracking(raw);
+                showScanResult('❌ 清单里没有这个单号：' + raw +
+                    (near ? '\n清单里最接近的是：' + near : '') +
+                    '\n（已自动兼容京东 -1-1 件序号；若仍不匹配，请核对录入的单号）', false);
+                if (confirm('未找到匹配的待收货商品：\n' + raw +
+                    (near ? '\n\n清单里最接近的单号：' + near : '') +
+                    '\n\n要把这个单号填到上方「快递单号」栏吗？')) {
                     const t = document.getElementById('purTracking');
                     if (t) { t.value = raw; t.focus(); }
                 }
@@ -1890,10 +2019,19 @@
                 return;
             }
 
-            const todo = hits.filter(p => !p.arrived);
+            // 只对「未入库」的记录做核销；已入库的记录保留着，扫到时直接回查显示
+            const todo = hits.filter(p => !p.stocked && !p.arrived);
             if (!todo.length) {
                 playBeep(false); vibrate([50, 50, 50]);
-                showScanResult('⚠️ 该单号已核销过了（' + hits.length + ' 件商品均已收货），请勿重复入库', false);
+                const doneHits = hits.filter(p => p.stocked);
+                if (doneHits.length) {
+                    const when = doneHits[0].stockedAt ? fmtTime(doneHits[0].stockedAt) : '';
+                    showScanResult('📦 这个单号已入库过了' + (when ? '（' + when + '）' : '') +
+                        '\n商品：' + doneHits.map(p => p.name + ' ×' + p.qty).join('、') +
+                        '\n请勿重复入库', false);
+                } else {
+                    showScanResult('⚠️ 该单号已核销过了（' + hits.length + ' 件商品均已收货，待入库）\n👉 点右侧「入库」转入库存', false);
+                }
                 el.select();
                 return;
             }
@@ -1904,16 +2042,20 @@
             let stocked = 0;
             const autoEl = document.getElementById('autoStockOnScan');
             if (autoEl && autoEl.checked) {
-                const ids = {};
-                todo.forEach(p => { if (stockOnePurchase(p)) { stocked++; ids[String(p.id)] = 1; } });
-                if (stocked) appData.purchases = (appData.purchases || []).filter(p => !ids[String(p.id)]);
+                // 只打标记不删记录，方便事后按单号回查
+                const now = new Date().toISOString();
+                todo.forEach(p => { if (stockOnePurchase(p)) { stocked++; p.stocked = true; p.stockedAt = now; } });
             }
 
             saveData();
             renderAllLists();
             playBeep(true); vibrate(60);
             const names = todo.map(p => p.name + ' ×' + p.qty).join('、');
-            showScanResult('✅ 核销成功（' + todo.length + ' 件）：' + names +
+            // 扫码值带件序号（-1-1）时说明匹配到了哪个已录单号，让用户心里有数
+            const no0 = todo[0].trackingNo || '';
+            const diffNote = (normTrack(no0) !== normTrack(raw))
+                ? '\n（面单 ' + raw + ' 已匹配单号 ' + no0 + '）' : '';
+            showScanResult('✅ 核销成功（' + todo.length + ' 件）：' + names + diffNote +
                            (stocked ? '\n📦 已自动入库 ' + stocked + ' 件' : '\n👉 点右侧「入库」转入库存'), true);
             el.value = '';
             el.focus();
@@ -1922,7 +2064,8 @@
         // 整单操作：未收齐→整单签收；已收齐且都有单价→整单入库
         function receiveOrder(orderNo) {
             const key = String(orderNo || '');
-            const items = (appData.purchases || []).filter(p => (p.orderNo || '').trim() === key);
+            // 已入库的排除在外，否则整单入库会把它们再入一次（库存翻倍）
+            const items = (appData.purchases || []).filter(p => (p.orderNo || '').trim() === key && !p.stocked);
             if (!items.length) return;
 
             const un = items.filter(p => !p.arrived);
@@ -1948,16 +2091,15 @@
             }
 
             if (!confirm('把订单「' + key + '」的 ' + items.length + ' 件商品全部入库？')) return;
-            const ids = {};
+            const now = new Date().toISOString();
             let n = 0;
-            items.forEach(p => { if (stockOnePurchase(p)) { n++; ids[String(p.id)] = 1; } });
-            appData.purchases = (appData.purchases || []).filter(p => !ids[String(p.id)]);
+            items.forEach(p => { if (stockOnePurchase(p)) { n++; p.stocked = true; p.stockedAt = now; } });
             saveData(); renderAllLists();
             showToast('✅ 已入库 ' + n + ' 件');
         }
 
         function markAllArrived() {
-            const un = (appData.purchases || []).filter(p => !p.arrived);
+            const un = (appData.purchases || []).filter(p => !p.arrived && !p.stocked);
             if (!un.length) { showToast('没有待收货的商品'); return; }
             if (!confirm('把全部 ' + un.length + ' 件商品标记为已收货？')) return;
             const now = new Date().toISOString();
@@ -1967,17 +2109,19 @@
         }
 
         function stockAllArrived() {
-            const done = (appData.purchases || []).filter(p => p.arrived);
-            if (!done.length) { showToast('没有已收货的商品'); return; }
+            // 已入库的排除，避免重复入库把库存翻倍
+            const done = (appData.purchases || []).filter(p => p.arrived && !p.stocked);
+            if (!done.length) { showToast('没有待入库的商品'); return; }
             const ok = done.filter(p => p.cost > 0);
             if (!ok.length) { showToast('已收货商品都还没填单价，请先补价'); return; }
             const skip = done.length - ok.length;
             if (!confirm('把 ' + ok.length + ' 件已收货商品（已填单价）全部入库？' + (skip ? '\n未填单价的 ' + skip + ' 件会留在清单里。' : ''))) return;
-            const ids = {};
-            ok.forEach(p => { stockOnePurchase(p); ids[String(p.id)] = 1; });
-            appData.purchases = (appData.purchases || []).filter(p => !ids[String(p.id)]);
+            // 同样只打标记不删记录，保留按单号回查的能力
+            const now = new Date().toISOString();
+            let cnt = 0;
+            ok.forEach(p => { if (stockOnePurchase(p)) { p.stocked = true; p.stockedAt = now; cnt++; } });
             saveData(); renderAllLists();
-            showToast('✅ 已入库 ' + ok.length + ' 件');
+            showToast('✅ 已入库 ' + cnt + ' 件');
         }
 
         /* ==================== 摄像头扫码 ==================== */
@@ -1988,6 +2132,19 @@
         */
         let scanStream = null, scanTimer = null, scanDetector = null, scanBusy = false;
         let h5qr = null, h5qrTimer = null;
+
+        // 给 Promise 加超时保护：iOS 主屏网页 App 里 getUserMedia 可能永久挂起（既不成功也不报错）
+        function withTimeout(promise, ms, timeoutMsg) {
+            let timer = null;
+            const guard = new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    const err = new Error(timeoutMsg || '操作超时');
+                    err.name = 'TimeoutError';
+                    reject(err);
+                }, ms);
+            });
+            return Promise.race([promise, guard]).finally(() => { if (timer) clearTimeout(timer); });
+        }
 
         // 浏览器实际可用的扫码方式
         function scannerCapabilities() {
@@ -2022,14 +2179,33 @@
             msg.innerText = '正在启动摄像头…';
 
             try {
-                // iOS Safari 不支持 facingMode 约束，用普通 video: true 即可（默认后摄，部分旧 iOS 为前摄）
-                scanStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' }, audio: false }
-                });
+                // iOS Safari 不支持 facingMode 约束，用 ideal 让系统优先选后摄
+                // ⚠️ WebKit Bug #282327：主屏网页 App 里 getUserMedia 可能既不 resolve 也不 reject（永久挂起），
+                //     所以必须包一层超时，否则用户只会看到「正在启动摄像头…」卡死且无任何报错
+                scanStream = await withTimeout(
+                    navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: 'environment' }, audio: false }
+                    }),
+                    window.__isStandalone ? 12000 : 8000,
+                    '摄像头无响应'
+                );
                 const video = document.getElementById('scanVideo');
                 video.srcObject = scanStream;
                 video.setAttribute('playsinline', 'true');
                 await video.play();
+
+                // ⚠️ 同一个 Bug 的第二种表现：流拿到了但几秒后自己断掉（MediaStreamTrack ended）
+                //     这里挂监听，断了要告诉用户原因，别让他对着黑屏发呆
+                if (scanStream && scanStream.getVideoTracks) {
+                    scanStream.getVideoTracks().forEach(tr => {
+                        tr.addEventListener('ended', () => {
+                            const m = document.getElementById('scanModalMsg');
+                            if (m && m.innerText.indexOf('中断') === -1) {
+                                m.innerText = '摄像头被系统中断了（苹果主屏网页 App 的已知问题）\n请改用「🖼️ 选图」拍照识别，或重启手机后再试';
+                            }
+                        });
+                    });
+                }
 
                 if (caps.native) {
                     // Chrome / Edge / Android：原生路径
@@ -2048,15 +2224,19 @@
                     msg.innerText = '当前浏览器没有任何扫码识别能力，请用「选图」或手动输入';
                 }
             } catch (e) {
-                const name = e && e.name || '';
+                const name = (e && e.name) || '';
                 let hint = '';
                 if (name === 'NotAllowedError') hint = '（请在浏览器设置里允许访问摄像头）';
                 else if (name === 'NotFoundError') hint = '（没找到可用摄像头）';
                 else if (name === 'NotReadableError') hint = '（摄像头被占用中，请关闭其它使用摄像头的 App）';
-                msg.innerText = '摄像头启动失败：' + (e && e.message ? e.message : e) + hint;
-                // 如果权限拒绝，可引导「选图」
-                if (name === 'NotAllowedError' || name === 'NotReadableError') {
-                    showScanResult('⚠️ 摄像头无法使用' + hint + '\n点「选图」可用手机拍照识别', false);
+                else if (name === 'TimeoutError') hint = '（摄像头一直没响应）';
+                else if (name === 'OverconstrainedError') hint = '（后置摄像头不可用，已尝试切换）';
+                msg.innerText = '摄像头启动失败：' + ((e && e.message) ? e.message : e) + hint;
+                // 主屏网页 App 模式：摄像头基本没救，直接把「选图」推到用户面前
+                if (window.__isStandalone) {
+                    showScanResult('⚠️ 主屏网页 App 模式下摄像头基本用不了（苹果系统 Bug）\n请直接用「🖼️ 选图」拍照识别，或改用 Safari 打开本页', false);
+                } else if (name === 'NotAllowedError' || name === 'NotReadableError' || name === 'TimeoutError') {
+                    showScanResult('⚠️ 摄像头无法使用' + hint + '\n点「🖼️ 选图」可用手机拍照识别', false);
                 }
             }
         }
@@ -2189,6 +2369,16 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // ⚠️ iOS「主屏网页 App」(standalone) 模式检测
+            //    该模式下：① localStorage 与 Safari 隔离，数据不互通 ② 摄像头有 WebKit Bug #282327
+            //    注意：iOS 26+ 即使网页没有 PWA manifest，添加到主屏也默认以 web app 打开
+            const isStandalone = (window.navigator && window.navigator.standalone === true) ||
+                (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+            window.__isStandalone = !!isStandalone;
+            if (isStandalone) {
+                const warnEl = document.getElementById('standaloneWarn');
+                if (warnEl) warnEl.style.display = 'block';
+            }
             const si = document.getElementById('scanInput');
             const lockEl = document.getElementById('purLock');
             if (si) {
