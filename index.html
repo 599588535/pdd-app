@@ -1617,14 +1617,34 @@
             saveData();
             e.target.reset();
             if (lock) lock.checked = keepLock;
+
+            // 总是保留「商品名 + 进货单价」（方便连续录入同一商品的多次收货）
+            const elName = document.getElementById('purName');
+            const elCost = document.getElementById('purCost');
+            if (elName) elName.value = name;
+            if (elCost) {
+                if (cost > 0) {
+                    // 用户本次输入了单价 → 沿用本次
+                    elCost.value = cost.toString();
+                } else if (name && appData.products[name] && appData.products[name].cost > 0) {
+                    // 本次没填但商品库里有均价 → 自动回填作参考
+                    elCost.value = appData.products[name].cost.toString();
+                }
+            }
+
             if (keepLock && elOrder) {
                 elOrder.value = orderNo;
                 if (elCourier) elCourier.value = courier;
                 if (elTrack) elTrack.value = trackingNo;
-                document.getElementById('purName').focus();
             }
+
+            // 聚焦数量框：录同一商品时通常只想改数量后回车，不再绕回商品名
+            const elQty = document.getElementById('purQty');
+            if (elQty) { elQty.focus(); elQty.select(); }
+
             renderPurchases();
-            showToast('已加入待收货清单');
+            const tipName = name.length > 14 ? name.slice(0, 14) + '…' : name;
+            showToast('已加入：' + tipName + '（表单已保留，直接改数量回车即可）');
         });
 
         function toggleArrived(id) {
