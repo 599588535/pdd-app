@@ -250,6 +250,9 @@
 
         .video-wrap { position: relative; width: 100%; background: #000; border-radius: var(--radius); overflow: hidden; }
         #scanVideo { width: 100%; display: block; height: 240px; object-fit: cover; }
+        /* html5-qrcode 在 Safari 路径下自己渲染 <video>，样式对齐原生预览 */
+        #h5qr-reader video { width: 100%; display: block; height: 240px; object-fit: cover; }
+        #h5qr-reader { position: relative; }
         .scan-line { position: absolute; left: 8%; right: 8%; top: 50%; height: 2px; background: var(--success); box-shadow: 0 0 8px var(--success); animation: scanMove 1.6s infinite ease-in-out; }
         @keyframes scanMove { 0%,100% { top: 28%; } 50% { top: 72%; } }
 
@@ -832,6 +835,8 @@
             <div class="video-wrap" data-page-node-id="7k7VUVWjql9llabNE0yjjB">
                 <video id="scanVideo" autoplay playsinline muted data-page-node-id="U3NLM9CAzhCpUnsTHEQ54s"></video>
                 <div class="scan-line" data-page-node-id="2MG5jAlrDbBKrIXq4hIhGv"></div>
+                <!-- Safari 路径：html5-qrcode 自管的预览会插到这个容器里 -->
+                <div id="h5qr-reader" style="display:none;"></div>
             </div>
             <div id="scanModalMsg" class="scan-hint" style="text-align: center; font-size: 0.8rem; color: #555;" data-page-node-id="wxNkFisbPNjqc7ESTU4YSZ">正在启动摄像头…</div>
             <div class="modal-actions" data-page-node-id="DjHkizdCWTaqKNmA4CQMNf">
@@ -840,8 +845,7 @@
         </div>
     </div>
 
-    <!-- h5-qrcode 自带的摄像头 UI 会插入到这个容器；这里我们用自己的 UI，所以让库指向一个隐藏 reader -->
-    <div id="h5qr-reader" style="display:none;" data-page-node-id="Wmm8OcUKs0hD2CjEiLLrAP"></div>
+    <!-- h5-qrcode 备用 reader 已移入 #scanModal 内（见 .video-wrap） -->
 
     <script>
         let appData = {
@@ -2037,9 +2041,9 @@
                     clearInterval(scanTimer);
                     scanTimer = setInterval(tickScanNative, 300);
                 } else if (caps.js) {
-                    // Safari / Firefox：JS 库路径
+                    // Safari / Firefox：JS 库路径（库自管摄像头）
                     msg.innerText = '对准快递单上的条形码，识别后自动核销（首次扫描约需 1-2 秒）';
-                    startH5QrContinuous(video);
+                    startH5QrContinuous();
                 } else {
                     msg.innerText = '当前浏览器没有任何扫码识别能力，请用「选图」或手动输入';
                 }
@@ -2076,12 +2080,23 @@
             scanBusy = false;
         }
 
-        // html5-qrcode 用 video 元素本身做 continuous scan（库默认带 UI，我们用 verbose=false 隐藏）
-        function startH5QrContinuous(video) {
+        // html5-qrcode 路径（Safari / Firefox）：库必须自己管理摄像头和预览，
+        // start() 第一个参数只能是 设备ID 或 { facingMode: ... } 配置对象 —— 不能传 video 元素
+        function startH5QrContinuous() {
+            const vid = document.getElementById('scanVideo');
+            const scanLine = vid && vid.parentElement ? vid.parentElement.querySelector('.scan-line') : null;
+            const readerBox = document.getElementById('h5qr-reader');
             try {
                 if (!h5qr) {
                     h5qr = new window.Html5Qrcode(/* readerId */ 'h5qr-reader');
                 }
+                // 先释放我们自己 getUserMedia 开的流：iOS 上两个流抢摄像头会黑屏/失败
+                if (scanStream) { try { scanStream.getTracks().forEach(t => t.stop()); } catch (e) {} scanStream = null; }
+                // 预览区切换：藏起原生 video，亮出库自渲染的容器
+                if (vid) { try { vid.pause(); } catch (e) {} vid.srcObject = null; vid.style.display = 'none'; }
+                if (scanLine) scanLine.style.display = 'none';
+                if (readerBox) readerBox.style.display = 'block';
+
                 const formatsToSupport = [
                     window.Html5QrcodeSupportedFormats.QR_CODE,
                     window.Html5QrcodeSupportedFormats.CODE_128,
@@ -2097,10 +2112,9 @@
                     window.Html5QrcodeSupportedFormats.PDF_417
                 ];
                 h5qr.start(
-                    video,
+                    { facingMode: 'environment' },   // ✅ 修复点：传摄像头配置，而不是 video 元素
                     {
                         fps: 10,
-                        qrbox: undefined,   // 用默认视窗
                         aspectRatio: 4 / 3,
                         disableFlip: false,
                         formatsToSupport: formatsToSupport,
@@ -2164,6 +2178,12 @@
             scanDetector = null; scanBusy = false;
             const v = document.getElementById('scanVideo');
             if (v) { try { v.pause(); } catch (e) {} v.srcObject = null; }
+            // 还原预览区：亮回原生 video，藏起 h5qr 容器
+            if (v) v.style.display = '';
+            const sl = v && v.parentElement ? v.parentElement.querySelector('.scan-line') : null;
+            if (sl) sl.style.display = '';
+            const rb = document.getElementById('h5qr-reader');
+            if (rb) { rb.style.display = 'none'; rb.innerHTML = ''; }
             const modal = document.getElementById('scanModal');
             if (modal) modal.style.display = 'none';
         }
