@@ -219,13 +219,6 @@
         }
 
         /* ==================== 收货核销 / 快递单号（新增） ==================== */
-        /* iOS「主屏网页 App」(standalone) 模式警告横幅 */
-        .standalone-warn { position: relative; max-width: 900px; margin: 0 auto 12px; padding: 12px 14px; background: #fff8e1; border: 1px solid #ffd54f; border-left: 5px solid #ff9800; border-radius: var(--radius); font-size: 0.82rem; line-height: 1.65; color: #6d4c00; }
-        .standalone-warn .sw-title { font-weight: bold; font-size: 0.92rem; margin-bottom: 6px; color: #e65100; }
-        .standalone-warn p { margin: 5px 0; }
-        .standalone-warn .sw-fix { margin-top: 8px; padding: 8px 10px; background: #fffde7; border-radius: 6px; border: 1px solid #ffe082; }
-        .sw-close { margin-top: 9px; padding: 6px 16px; background: #ff9800; color: #fff; border: none; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: bold; }
-        .sw-close:active { background: #ef6c00; }
         .scan-box { background: #f0f7ff; border: 1px solid #cfe4fb; border-radius: var(--radius); padding: 12px; margin: 15px 0 10px; }
         .scan-title { font-size: 0.85rem; font-weight: bold; color: var(--info); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
         .scan-row { display: flex; gap: 8px; }
@@ -279,17 +272,7 @@
 
     <div id="toast" class="toast" data-page-node-id="iYZiAKZaJdLSRKVTUFozvJ">操作成功</div>
 
-    <!-- 仅 iOS「主屏网页 App」模式显示：该模式存储与 Safari 隔离 + 摄像头有系统级 Bug -->
-    <div id="standaloneWarn" class="standalone-warn" style="display:none;">
-        <div class="sw-title">⚠️ 你正在用「主屏幕图标」打开（网页 App 模式）</div>
-        <p>苹果在这个模式下有两个已知问题，会直接影响你的账本：</p>
-        <p><b>1. 数据和 Safari 里的不互通</b> —— 在这里录的单子，用 Safari 打开看不到；反过来也一样。两个地方各存一份，账会记乱。</p>
-        <p><b>2. 摄像头扫码经常失败</b> —— 苹果系统的 Bug（WebKit #282327），重启手机能好一阵但会复现。</p>
-        <p class="sw-fix">✅ <b>推荐做法</b>：用 <b>Safari 打开本页</b>加个书签，数据和扫码都正常。<br>如果就想用这个全屏图标，扫码请一律用「🖼️ 选图」拍照识别 —— 它不依赖摄像头，稳定可用。</p>
-        <button type="button" class="sw-close" onclick="this.parentElement.style.display='none'">我知道了</button>
-    </div>
-
-    <div class="dashboard" data-page-node-id="NbTlhkI0zbAQ06SfZ5L25e">
+    <div class="dashboard" id="dashboard" data-page-node-id="NbTlhkI0zbAQ06SfZ5L25e">
         <div class="top-bar" data-page-node-id="99AaaCSdBeajv0JlEVpOGr">
             <h1 data-page-node-id="GlA9f1wYUOSYwyAmQ5AFnc">📊 经营概览</h1>
         </div>
@@ -445,6 +428,7 @@
                     </select>
                     <button type="button" class="btn btn-outline btn-sm" onclick="markAllArrived()" data-page-node-id="o6nvsweGfwNxemAUyFStLo">✅ 全部标记已收</button>
                     <button type="button" class="btn btn-outline btn-sm" onclick="stockAllArrived()" data-page-node-id="ebQiufDOVHKdvzEcvBc4HK">📦 已收货全部入库</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnClearStocked" style="display:none;" onclick="clearStockedHistory()">🗑️ 清空入库历史</button>
                 </div>
 
                 <div id="purchaseList" class="record-list" style="margin-top: 15px;" data-page-node-id="JNlw92FTBkLuGz2gmIUqiR"></div>
@@ -1746,12 +1730,27 @@
                 </div>`;
         }
 
+        // 已入库的记录会一直保留（便于按单号回查），攒多了可一键清理
+        function clearStockedHistory() {
+            const all = appData.purchases || [];
+            const stocked = all.filter(p => p.stocked);
+            if (!stocked.length) { showToast('没有已入库的历史记录'); return; }
+            if (!confirm('确定清空这 ' + stocked.length + ' 条已入库的历史记录吗？\n\n只清「采购待收货」里的历史条目，不会影响库存数量，也不会删掉出入库流水。')) return;
+            appData.purchases = all.filter(p => !p.stocked);
+            saveData();
+            renderPurchases();
+            showToast('已清空 ' + stocked.length + ' 条入库历史');
+        }
+
         function renderPurchases() {
             const box = document.getElementById('purchaseList');
             if (!box) return;
             if (!appData.purchases) appData.purchases = [];
             const all = appData.purchases;
             // 已入库的记录保留在 purchases 里（可按单号回查），但不再计入「待收货」进度和角标
+            const stockedList = all.filter(p => p.stocked);
+            const btnClear = document.getElementById('btnClearStocked');
+            if (btnClear) btnClear.style.display = stockedList.length ? '' : 'none';
             const active = all.filter(p => !p.stocked);
             const arrived = active.filter(p => p.arrived).length;
             const prog = document.getElementById('purchaseProgress');
@@ -2369,16 +2368,11 @@ function findByTracking(rawInput, allowFuzzy) {
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // ⚠️ iOS「主屏网页 App」(standalone) 模式检测
-            //    该模式下：① localStorage 与 Safari 隔离，数据不互通 ② 摄像头有 WebKit Bug #282327
-            //    注意：iOS 26+ 即使网页没有 PWA manifest，添加到主屏也默认以 web app 打开
+            // iOS「主屏网页 App」(standalone) 模式检测（不再弹提示横幅，仅用于调整摄像头超时策略：
+            // 该模式下摄像头有 WebKit Bug #282327，既可能永久挂起也可能中途断轨，给它更长的等待时间）
             const isStandalone = (window.navigator && window.navigator.standalone === true) ||
                 (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
             window.__isStandalone = !!isStandalone;
-            if (isStandalone) {
-                const warnEl = document.getElementById('standaloneWarn');
-                if (warnEl) warnEl.style.display = 'block';
-            }
             const si = document.getElementById('scanInput');
             const lockEl = document.getElementById('purLock');
             if (si) {
@@ -2856,8 +2850,15 @@ function findByTracking(rawInput, allowFuzzy) {
             navEl.classList.add('active');
             document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
             document.getElementById('page-' + tabId).classList.add('active');
+            // 红色「经营概览」数据块只在首页显示 —— 其它页面隐藏，省掉一大块重复内容，直接看到表单
+            showDashboard(tabId === 'home');
             if (tabId === 'stats') renderStats();
             window.scrollTo(0, 0);
+        }
+
+        function showDashboard(show) {
+            const dash = document.getElementById('dashboard');
+            if (dash) dash.style.display = show ? '' : 'none';
         }
 
         function showToast(msg) {
