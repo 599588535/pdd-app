@@ -286,6 +286,7 @@
     <div class="dashboard" id="dashboard" data-page-node-id="NbTlhkI0zbAQ06SfZ5L25e">
         <div class="top-bar" data-page-node-id="99AaaCSdBeajv0JlEVpOGr">
             <h1 data-page-node-id="GlA9f1wYUOSYwyAmQ5AFnc">📊 经营概览</h1>
+            <span id="appVerBadge" style="font-size: 0.68rem; opacity: 0.85; font-weight: normal; white-space: nowrap;" data-page-node-id="appVer00">-</span>
         </div>
         
         <div class="date-controls" data-page-node-id="IeXxzyQPp4YoXRckYVUgAb">
@@ -550,10 +551,6 @@
                     <button type="submit" class="btn btn-primary" data-page-node-id="PNit2j32KuqJjbTM4erDwQ">确认出单</button>
                 </form>
             </div>
-            <div class="card" data-page-node-id="4KdTBXaWe9zl1ObZoS1vDj">
-                <div class="card-header" style="font-size: 1rem; border-left-color: var(--primary-color);" data-page-node-id="4o01r9QenLlvXc5exsUgNG">出单历史</div>
-                <div id="listOut" class="record-list" data-page-node-id="1s60BYzwQLsjiXhrXQqD9g"></div>
-            </div>
             <div class="card" data-page-node-id="rejCard01">
                 <div class="card-header" style="border-left-color: var(--warning);" data-page-node-id="rejCard02">📮 拒收件（发出后被拒收）</div>
                 <div class="sync-status" style="margin: -8px 0 12px; text-align: left;" data-page-node-id="rejCard03">💡 快递发出后被买家拒收，先记在这里；包裹退回你手上后点「收到」，自动把货回存到库存</div>
@@ -592,7 +589,11 @@
                 </div>
                 <div id="rejectList" class="record-list" style="margin-top: 5px;" data-page-node-id="rejCard28"></div>
             </div>
-        </div>
+            <div class="card" data-page-node-id="4KdTBXaWe9zl1ObZoS1vDj">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--primary-color);" data-page-node-id="4o01r9QenLlvXc5exsUgNG">出单历史</div>
+                <div id="listOut" class="record-list" data-page-node-id="1s60BYzwQLsjiXhrXQqD9g"></div>
+            </div>
+                    </div>
 
         <div id="page-return" class="page" data-page-node-id="FBzj7pg4dERSu4AB0H3fFI">
             <div class="card" data-page-node-id="x0XGmnu2bc4JB31CLaaxqM">
@@ -799,6 +800,18 @@
                 <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;" data-page-node-id="uixiUWFIf0lk6RPdXWpLbx">*配置并保存后自动开启：修改约3秒后自动上传，打开页面自动拉取云端较新数据<br data-page-node-id="YlNrBTOAv9Up7UizHgTMyA">*建议数据仓库存<b data-page-node-id="zBXF85AjZDzgAzmeFvinKQ">私有</b>仓库（数据不公开），程序文件可放公开仓库生成网址供手机访问</small>
             </div>
 
+            <!-- 版本体检（新增） -->
+            <div class="card" data-page-node-id="verCard01">
+                <div class="card-header" style="border-left-color: var(--warning);" data-page-node-id="verCard02">🩺 版本体检（更新有没有生效）</div>
+                <div class="sync-status" style="margin: -8px 0 12px; text-align: left;" data-page-node-id="verCard03">当前你打开的这个页面版本：<b id="localVer" data-page-node-id="verCard04">-</b></div>
+                <p style="font-size: 0.82rem; color: #666; margin: 0 0 10px; line-height: 1.6;" data-page-node-id="verCard05">点下面按钮，直接问 GitHub「仓库里的网页是什么版本」（这条通道不经过缓存），用来判断：① 上传到底成功没有　② 你看到的是不是旧缓存。</p>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;" data-page-node-id="verCard06">
+                    <button type="button" class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="checkOnlineVersion()" data-page-node-id="verCard07">🔍 检查线上版本</button>
+                    <button type="button" class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="copyVersionInfo()" data-page-node-id="verCard08">📋 复制版本信息</button>
+                </div>
+                <div class="sync-status" id="verCheckResult" data-page-node-id="verCard09">未检查</div>
+            </div>
+
             <div class="card" data-page-node-id="cGz8GZP7v0hlQyGUj874eB">
                 <div class="card-header" data-page-node-id="Xtx8RLkqqHNEjeJmpuiiqo">🗃️ 本地备份</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;" data-page-node-id="XcaUGGwoIxEmk1wTED1OV3">
@@ -923,6 +936,9 @@
 
         const DEFAULT_FEE_RATE = 0.006;
         const FILE_NAME = 'pdd_biz_data.json';
+
+        /* ==================== 版本与更新自检（新增） ==================== */
+        const APP_BUILD = '2026-09-17 12:53';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1100,6 +1116,126 @@
         function setSyncStatus(t) {
             const el = document.getElementById('syncStatus');
             if (el) el.innerText = t;
+        }
+
+        /* ---------- 版本显示 / 线上版本自检（新增） ---------- */
+
+        function showAppVersion() {
+            const b1 = document.getElementById('appVerBadge');
+            const b2 = document.getElementById('localVer');
+            if (b1) b1.innerText = 'v' + APP_BUILD;
+            if (b2) b2.innerText = APP_BUILD;
+            try { console.log('[拼多多助手] 页面版本 ' + APP_BUILD); } catch (e) {}
+        }
+
+        function fmtGhDate(iso) {
+            if (!iso) return '未知';
+            const dt = new Date(iso);
+            if (isNaN(dt.getTime())) return '未知';
+            const pp = (n) => String(n).padStart(2, '0');
+            return dt.getFullYear() + '-' + pp(dt.getMonth() + 1) + '-' + pp(dt.getDate()) + ' ' +
+                   pp(dt.getHours()) + ':' + pp(dt.getMinutes());
+        }
+
+        async function checkOnlineVersion() {
+            const out = document.getElementById('verCheckResult');
+            const set = (t) => { if (out) out.innerText = t; };
+            const uEl = document.getElementById('ghUser');
+            const rEl = document.getElementById('ghRepo');
+            const tEl = document.getElementById('ghToken');
+            const user = ((uEl && uEl.value.trim()) || ghConfig.user || '').trim();
+            const repo = ((rEl && rEl.value.trim()) || ghConfig.repo || '').trim();
+            const token = ((tEl && tEl.value.trim()) || ghConfig.token || '').trim();
+
+            if (!user || !repo) { set('⚠️ 请先在上方「GitHub 云端同步」里填写用户名和仓库名（网页放哪个仓库就填哪个）'); return; }
+
+            set('正在检查线上版本…');
+            const headers = token ? { Authorization: 'token ' + token } : {};
+            const paths = ['index.html', 'docs/index.html', 'public/index.html', 'dist/index.html'];
+            const found = [];
+            const tried = [];
+
+            for (const p of paths) {
+                const url = 'https://api.github.com/repos/' + user + '/' + repo + '/contents/' + p + '?t=' + Date.now();
+                let res;
+                try { res = await fetch(url, { headers: headers, cache: 'no-store' }); }
+                catch (e) { tried.push(p + ' → 网络错误'); continue; }
+                if (res.status === 200) {
+                    let j = null;
+                    try { j = await res.json(); } catch (e) {}
+                    let text = '';
+                    try { text = base64ToUtf8(String((j && j.content) || '').replace(/\s/g, '')); } catch (e) { text = ''; }
+                    const m = text.match(/APP_BUILD\s*=\s*'([^']+)'/);
+                    let commitDate = '';
+                    try {
+                        const cu = 'https://api.github.com/repos/' + user + '/' + repo + '/commits?path=' + p + '&per_page=1&t=' + Date.now();
+                        const cr = await fetch(cu, { headers: headers, cache: 'no-store' });
+                        if (cr.status === 200) {
+                            const cj = await cr.json();
+                            if (cj && cj[0] && cj[0].commit && cj[0].commit.committer) commitDate = cj[0].commit.committer.date;
+                        }
+                    } catch (e) {}
+                    found.push({ path: p, size: (j && j.size) || 0, build: m ? m[1] : '', date: commitDate });
+                } else if (res.status === 404) {
+                    tried.push(p + ' → 不存在');
+                } else {
+                    tried.push(p + ' → HTTP ' + res.status + (res.status === 401 || res.status === 403 ? '（Token 无权限或已失效）' : ''));
+                }
+            }
+
+            if (!found.length) {
+                set('❌ 在仓库 ' + user + '/' + repo + ' 里没找到网页文件。\n' +
+                    '试过：' + tried.join('；') + '\n\n' +
+                    '可能原因：① 网页放在另一个仓库（把那个仓库名填到上面的「仓库名称」再点一次）② 文件名不叫 index.html ③ 用户名/仓库名写错了');
+                return;
+            }
+
+            const lines = [];
+            let allMatch = false;
+            found.forEach((f) => {
+                const same = f.build && f.build === APP_BUILD;
+                if (same) allMatch = true;
+                const head = same ? '✅ ' + f.path + ' ＝ 线上已是最新版本'
+                    : (f.build ? '⚠️ ' + f.path + ' ＝ 线上是【旧版本】' : '⚠️ ' + f.path + ' ＝ 线上文件没有版本标记（是更早的老版本）');
+                lines.push(head);
+                lines.push('     线上版本：' + (f.build || '（无）'));
+                lines.push('     文件大小：' + Math.round(f.size / 1024) + ' KB' + (f.size ? '（本地约 564 KB）' : ''));
+                lines.push('     最后更新：' + fmtGhDate(f.date));
+            });
+
+            const tail = allMatch
+                ? '\n👉 结论：GitHub 上的文件已经是最新的。你现在看到的旧界面，是浏览器／CDN 缓存造成的 —— 用「?v=' + Date.now() + '」这种带参数的地址打开，或在手机设置里清一次该网站数据。'
+                : '\n👉 结论：GitHub 上的文件还不是最新的。请重新上传本地最新的 index.html（注意别传成旧副本），传完等 1 分钟再检查一次。';
+
+            set(lines.join('\n') + tail);
+        }
+
+        function copyTextFallback(t) {
+            const old = () => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = t;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    showToast('已复制版本信息');
+                } catch (e) { showToast('复制失败，请手动记录版本号'); }
+            };
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(t).then(() => showToast('已复制版本信息'), old);
+                    return;
+                }
+            } catch (e) {}
+            old();
+        }
+
+        function copyVersionInfo() {
+            const stamp = '页面版本: ' + APP_BUILD + '\n当前地址: ' + location.href + '\n浏览器: ' + String(navigator.userAgent || '').slice(0, 130);
+            copyTextFallback(stamp);
         }
 
         function scheduleAutoSync() {
@@ -2477,6 +2613,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 if (/^[0-9A-Za-z]$/.test(e.key) && si) si.focus();
             });
             updatePurBadge();
+            showAppVersion();
         });
 
         function renderAllLists() {
