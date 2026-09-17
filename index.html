@@ -218,7 +218,7 @@
             .record-item:hover { background: #fdf7f7; }
         }
 
-        /* ==================== 收货核销 / 快递单号（新增） ==================== */
+        /* ==================== 收货核销 / 快递单号 ==================== */
         .scan-box { background: #f0f7ff; border: 1px solid #cfe4fb; border-radius: var(--radius); padding: 12px; margin: 15px 0 10px; }
         .scan-title { font-size: 0.85rem; font-weight: bold; color: var(--info); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
         .scan-row { display: flex; gap: 8px; }
@@ -226,8 +226,10 @@
         .btn-scan { padding: 0 14px; background: var(--info); color: #fff; border: none; border-radius: var(--radius); font-size: 0.9rem; font-weight: bold; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
         .btn-scan:active { opacity: 0.8; }
         .scan-hint { font-size: 0.72rem; color: #888; margin-top: 6px; line-height: 1.6; }
+        .scan-hint b { color: #555; }
         .scan-opt { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #666; margin-top: 8px; cursor: pointer; }
         .scan-opt input { width: auto; }
+
         #scanResult { display: none; margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: #fff; border: 1px solid #eee; font-size: 0.8rem; font-weight: bold; line-height: 1.5; word-break: break-all; }
 
         .pur-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
@@ -246,6 +248,7 @@
 
         .track-tag { display: inline-block; font-size: 0.68rem; background: rgba(33,150,243,0.1); color: var(--info); border-radius: 4px; padding: 1px 6px; margin-top: 4px; }
         .courier-tag { display: inline-block; font-size: 0.68rem; background: rgba(156,39,176,0.1); color: var(--purple); border-radius: 4px; padding: 1px 6px; margin-top: 4px; margin-right: 4px; }
+        .account-tag { display: inline-block; font-size: 0.68rem; background: rgba(0,200,83,0.1); color: #00893a; border-radius: 4px; padding: 1px 6px; margin-top: 4px; margin-right: 4px; }
 
         .lock-row { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #666; margin: -6px 0 12px; cursor: pointer; }
         .lock-row input { width: auto; }
@@ -261,6 +264,14 @@
 
         .nav-badge { display: none; position: absolute; top: 2px; right: 50%; margin-right: -26px; background: var(--danger); color: #fff; font-size: 0.58rem; line-height: 1; padding: 2px 5px; border-radius: 9px; font-weight: bold; }
         @media (min-width: 768px) { .nav-badge { position: static; margin: 0 0 0 auto; font-size: 0.62rem; padding: 2px 7px; } }
+
+        /* ==================== 拒收件（新增） ==================== */
+        .reject-item { display: flex; align-items: center; gap: 10px; background: #fffdf7; border: 1px solid #f3e2c3; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
+        .reject-item.received { background: #f6fbf7; border-color: #cdeccd; }
+        .reject-info { flex: 1; min-width: 0; }
+        .reject-info h4 { margin: 0; font-size: 0.95rem; }
+        .reject-info p { margin: 2px 0 0; font-size: 0.75rem; color: #999; }
+        .reject-actions { display: flex; gap: 6px; flex-shrink: 0; }
     </style>
 
     <!-- html5-qrcode inlined so the scanner works on iOS Safari (which lacks BarcodeDetector).
@@ -379,6 +390,14 @@
                         <div class="form-group" style="flex: 1;" data-page-node-id="aosEZatLDSAjH7YApv15Go">
                             <label data-page-node-id="VFDGMIXwwn9gL84BWIdTdH">进货单价 (选填)</label>
                             <input type="number" id="purCost" placeholder="0.00" step="0.01" data-page-node-id="UxjsdFT0cxrKGKy6m5fbJE">
+                        </div>
+                    </div>
+                    <div class="form-group" data-page-node-id="purAcct01">
+                        <label data-page-node-id="purAcct02">下单账号 (点击选择历史账号)</label>
+                        <div class="input-wrapper select-wrapper has-dd" data-page-node-id="purAcct03">
+                            <input type="text" id="purAccount" placeholder="例如：账号A / 张三的号" autocomplete="off" onfocus="showAccountSuggestions()" data-page-node-id="purAcct04">
+                            <span class="dd-arrow" onclick="acctTap()" data-page-node-id="purAcct05">▼</span>
+                            <div id="purAccountSuggestions" class="suggestions" data-page-node-id="purAcct06"></div>
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;" data-page-node-id="XtXHgOGnGQZnGvZcnCJhpH">
@@ -534,6 +553,44 @@
             <div class="card" data-page-node-id="4KdTBXaWe9zl1ObZoS1vDj">
                 <div class="card-header" style="font-size: 1rem; border-left-color: var(--primary-color);" data-page-node-id="4o01r9QenLlvXc5exsUgNG">出单历史</div>
                 <div id="listOut" class="record-list" data-page-node-id="1s60BYzwQLsjiXhrXQqD9g"></div>
+            </div>
+            <div class="card" data-page-node-id="rejCard01">
+                <div class="card-header" style="border-left-color: var(--warning);" data-page-node-id="rejCard02">📮 拒收件（发出后被拒收）</div>
+                <div class="sync-status" style="margin: -8px 0 12px; text-align: left;" data-page-node-id="rejCard03">💡 快递发出后被买家拒收，先记在这里；包裹退回你手上后点「收到」，自动把货回存到库存</div>
+                <form id="formReject" data-page-node-id="rejCard04">
+                    <div class="form-group" data-page-node-id="rejCard05">
+                        <label data-page-node-id="rejCard06">快递单号 (选填 · 用于核对)</label>
+                        <input type="text" id="rejTracking" placeholder="例如：JD0123456789" data-page-node-id="rejCard07">
+                    </div>
+                    <div class="form-group" data-page-node-id="rejCard08">
+                        <label data-page-node-id="rejCard09">商品名称 (点击选择)</label>
+                        <div class="input-wrapper select-wrapper has-dd" data-page-node-id="rejCard10">
+                            <input type="text" id="rejName" placeholder="选择或输入商品..." autocomplete="off" onfocus="showSuggestions('rej')" data-page-node-id="rejCard11">
+                            <span class="dd-arrow" onclick="ddTap('rej')" data-page-node-id="rejCard12">▼</span>
+                            <div id="rejSuggestions" class="suggestions" data-page-node-id="rejCard13"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;" data-page-node-id="rejCard14">
+                        <div class="form-group" style="flex: 1;" data-page-node-id="rejCard15">
+                            <label data-page-node-id="rejCard16">数量</label>
+                            <input type="number" id="rejQty" placeholder="1" min="1" value="1" data-page-node-id="rejCard17">
+                        </div>
+                        <div class="form-group" style="flex: 1;" data-page-node-id="rejCard18">
+                            <label data-page-node-id="rejCard19">价格 (元)</label>
+                            <input type="number" id="rejPrice" placeholder="0.00" step="0.01" data-page-node-id="rejCard20">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-warning" data-page-node-id="rejCard21">➕ 加入拒收件</button>
+                </form>
+                <div class="pur-toolbar" style="margin-top: 15px;" data-page-node-id="rejCard22">
+                    <select id="rejFilter" onchange="renderRejects()" data-page-node-id="rejCard23">
+                        <option value="all" data-page-node-id="rejCard24">全部</option>
+                        <option value="pending" data-page-node-id="rejCard25">🔙 退回中</option>
+                        <option value="received" data-page-node-id="rejCard26">✅ 已收到</option>
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnClearRej" style="display:none;" onclick="clearReceivedRejects()" data-page-node-id="rejCard27">🗑️ 清空已收到</button>
+                </div>
+                <div id="rejectList" class="record-list" style="margin-top: 5px;" data-page-node-id="rejCard28"></div>
             </div>
         </div>
 
@@ -1610,6 +1667,8 @@
             const orderNo = elOrder ? elOrder.value.trim() : '';
             const courier = elCourier ? elCourier.value.trim() : '';
             const trackingNo = elTrack ? elTrack.value.trim() : '';
+            const elAcct = document.getElementById('purAccount');
+            const account = elAcct ? elAcct.value.trim() : '';
             // 表单 reset 会清掉勾选状态，必须在 reset 前先读出来
             const lock = document.getElementById('purLock');
             const keepLock = lock ? !!lock.checked : false;
@@ -1619,13 +1678,17 @@
             if (!appData.purchases) appData.purchases = [];
             appData.purchases.unshift({
                 id: genId(), name, qty, cost, note,
-                orderNo, courier, trackingNo,
+                orderNo, courier, trackingNo, account,
                 arrived: false,
                 createdAt: new Date().toISOString()
             });
             saveData();
             e.target.reset();
             if (lock) lock.checked = keepLock;
+            // 下单账号：记住本次输入（下次默认带出，也可下拉选历史账号）
+            rememberAccount(account);
+            const acctInput = document.getElementById('purAccount');
+            if (acctInput) acctInput.value = account;
 
             // 总是保留「商品名 + 进货单价」（方便连续录入同一商品的多次收货）
             const elName = document.getElementById('purName');
@@ -1710,6 +1773,7 @@
 
         function purchaseItemHTML(p) {
             const tags = [];
+            if (p.account) tags.push('<span class="account-tag">👤 ' + esc(p.account) + '</span>');
             if (p.courier) tags.push('<span class="courier-tag">🚚 ' + esc(p.courier) + '</span>');
             if (p.trackingNo) tags.push('<span class="track-tag">📦 ' + esc(p.trackingNo) + '</span>');
             const stateText = p.stocked ? '📦 已入库' : (p.arrived ? '✅ 已收货' : '⏳ 待收货');
@@ -2388,6 +2452,20 @@ function findByTracking(rawInput, allowFuzzy) {
                 auto.addEventListener('change', (e) => { try { localStorage.setItem('pddAutoStockOnScan', e.target.checked ? '1' : '0'); } catch (err) {} });
             }
             if (lockEl) lockEl.checked = localStorage.getItem('pddPurLock') === '1';
+            // 下单账号：自动带出上次用的账号，输入时过滤历史账号
+            const acctEl = document.getElementById('purAccount');
+            if (acctEl) {
+                try {
+                    const last = localStorage.getItem('pddLastAccount');
+                    if (last && !acctEl.value) acctEl.value = last;
+                } catch (e) {}
+                acctEl.addEventListener('input', () => {
+                    const box = document.getElementById('purAccountSuggestions');
+                    if (box && box.style.display === 'block') showAccountSuggestions();
+                });
+            }
+            initRejectForm();
+            renderRejects();
             // 停留在「入库」页时，扫码枪直接输入也能落到单号框
             document.addEventListener('keydown', (e) => {
                 const page = document.getElementById('page-in');
@@ -2409,6 +2487,7 @@ function findByTracking(rawInput, allowFuzzy) {
             renderFeeList();
             renderStockList();
             renderPurchases();
+            renderRejects();
         }
 
         function getStockSort() {
@@ -2637,7 +2716,8 @@ function findByTracking(rawInput, allowFuzzy) {
                 in: ['inName', 'inSuggestions'],
                 out: ['outName', 'outSuggestions'],
                 return: ['retName', 'retSuggestions'],
-                pur: ['purName', 'purSuggestions']
+                pur: ['purName', 'purSuggestions'],
+                rej: ['rejName', 'rejSuggestions']
             };
             return map[type] || map.in;
         }
@@ -2678,7 +2758,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 if (type === 'out') {
                     box.innerHTML = '<div class="suggestion-empty">暂无有库存的商品，请先入库</div>';
                     box.style.display = 'block';
-                } else if (type === 'pur') {
+                } else if (type === 'pur' || type === 'rej') {
                     box.innerHTML = '<div class="suggestion-empty">管理里还没有商品，可先直接输入名称</div>';
                     box.style.display = 'block';
                 } else {
@@ -2703,7 +2783,7 @@ function findByTracking(rawInput, allowFuzzy) {
             box.style.display = 'block';
         }
 
-        ['in', 'out', 'return', 'pur'].forEach(type => {
+        ['in', 'out', 'return', 'pur', 'rej'].forEach(type => {
             const [inputId, boxId] = ddIds(type);
             const input = document.getElementById(inputId);
             if (!input) return;
@@ -2732,12 +2812,174 @@ function findByTracking(rawInput, allowFuzzy) {
                 } else if (type === 'out') {
                     box.innerHTML = '<div class="suggestion-empty">没有匹配的有库存商品</div>';
                     box.style.display = 'block';
-                } else if (type === 'pur') {
+                } else if (type === 'pur' || type === 'rej') {
                     box.innerHTML = '<div class="suggestion-empty">没有匹配的商品，可直接输入新名字</div>';
                     box.style.display = 'block';
                 } else { box.style.display = 'none'; }
             });
         });
+
+
+        // ==================== 下单账号：记忆 + 历史账号下拉 ====================
+        // 账号来源 = 手动保存过的列表 + 历史采购记录里出现过的账号（去重，最近优先）
+        function accountList() {
+            const hist = (appData.purchases || []).map(p => String(p.account || '').trim()).filter(Boolean);
+            const saved = Array.isArray(appData.accounts) ? appData.accounts.filter(Boolean) : [];
+            const seen = {}, out = [];
+            saved.concat(hist).forEach(a => {
+                const k = a.toLowerCase();
+                if (!seen[k]) { seen[k] = 1; out.push(a); }
+            });
+            return out;
+        }
+
+        // 记住本次用的账号（下次自动带出，并可下拉选历史账号）
+        function rememberAccount(name) {
+            const a = String(name || '').trim();
+            if (!a) return;
+            if (!Array.isArray(appData.accounts)) appData.accounts = [];
+            appData.accounts = [a].concat(appData.accounts.filter(x => String(x).toLowerCase() !== a.toLowerCase())).slice(0, 60);
+            try { localStorage.setItem('pddLastAccount', a); } catch (e) {}
+        }
+
+        function showAccountSuggestions() {
+            const input = document.getElementById('purAccount');
+            const box = document.getElementById('purAccountSuggestions');
+            if (!input || !box) return;
+            const all = accountList();
+            if (!all.length) {
+                box.innerHTML = '<div class="suggestion-empty">还没有历史账号，直接输入即可（下次就能选）</div>';
+                box.style.display = 'block';
+                return;
+            }
+            const val = input.value.trim().toLowerCase();
+            const list = val ? all.filter(a => a.toLowerCase().indexOf(val) >= 0) : all;
+            if (!list.length) {
+                box.innerHTML = '<div class="suggestion-empty">没有匹配的历史账号，可直接输入新账号</div>';
+                box.style.display = 'block';
+                return;
+            }
+            box.innerHTML = '';
+            list.forEach(a => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.innerHTML = '<div>👤 ' + esc(a) + '</div>';
+                div.onclick = () => { input.value = a; box.style.display = 'none'; };
+                box.appendChild(div);
+            });
+            box.style.display = 'block';
+        }
+
+        // 点小三角：只弹列表不弹键盘
+        function acctTap() {
+            const input = document.getElementById('purAccount');
+            const box = document.getElementById('purAccountSuggestions');
+            if (!input || !box) return;
+            if (box.style.display === 'block') { box.style.display = 'none'; return; }
+            showAccountSuggestions();
+            if (document.activeElement === input) input.blur();
+        }
+
+        // ==================== 拒收件（发出快递后被拒收） ====================
+        function rejectForm() { return document.getElementById('formReject'); }
+
+        function initRejectForm() {
+            const f = rejectForm();
+            if (!f || f._bound) return;
+            f._bound = true;
+            f.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const trackingNo = (document.getElementById('rejTracking').value || '').trim();
+                const name = (document.getElementById('rejName').value || '').trim();
+                const qty = parseFloat(document.getElementById('rejQty').value) || 0;
+                const price = parseFloat(document.getElementById('rejPrice').value) || 0;
+                if (!name) { alert('请输入商品名称'); return; }
+                if (qty <= 0) { alert('请输入有效的数量'); return; }
+                if (!Array.isArray(appData.rejects)) appData.rejects = [];
+                appData.rejects.unshift({
+                    id: genId(), trackingNo, name, qty, price,
+                    received: false,
+                    createdAt: new Date().toISOString()
+                });
+                saveData();
+                e.target.reset();
+                const q = document.getElementById('rejQty');
+                if (q) q.value = 1;
+                renderRejects();
+                showToast('已加入拒收件：' + name + ' ×' + qty);
+            });
+        }
+
+        function renderRejects() {
+            const box = document.getElementById('rejectList');
+            if (!box) return;
+            if (!Array.isArray(appData.rejects)) appData.rejects = [];
+            const all = appData.rejects;
+            const got = all.filter(r => r.received);
+            const btn = document.getElementById('btnClearRej');
+            if (btn) btn.style.display = got.length ? '' : 'none';
+
+            const fEl = document.getElementById('rejFilter');
+            const f = fEl ? fEl.value : 'all';
+            const list = f === 'pending' ? all.filter(r => !r.received)
+                       : (f === 'received' ? got : all);
+            if (!list.length) {
+                box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">' +
+                    (f === 'received' ? '还没有已收到的拒收件' : '暂无拒收件') + '</div>';
+                return;
+            }
+            box.innerHTML = list.map(r => {
+                const tags = [];
+                if (r.trackingNo) tags.push('<span class="track-tag">📦 ' + esc(r.trackingNo) + '</span>');
+                const when = r.received ? (r.receivedAt ? fmtTime(r.receivedAt) : '') : (r.createdAt ? fmtTime(r.createdAt) : '');
+                return `
+                <div class="reject-item ${r.received ? 'received' : ''}">
+                    <div class="reject-info">
+                        <h4>${esc(r.name)} × ${r.qty}</h4>
+                        <p>${r.received ? '✅ 已收到 · 已回存库存' : '🔙 退回中（等包裹退回）'}${r.price > 0 ? ' ｜ ¥' + (r.price * r.qty).toFixed(2) : ''}${when ? ' ｜ ' + when : ''}</p>
+                        ${tags.length ? '<div>' + tags.join('') + '</div>' : ''}
+                    </div>
+                    <div class="reject-actions">
+                        ${r.received ? '' : `<a href="javascript:void(0)" class="action-link" style="color: var(--success); background: rgba(0,200,83,0.12);" onclick="receiveReject('${r.id}')">收到</a>`}
+                        <a href="javascript:void(0)" class="action-link delete" onclick="delReject('${r.id}')">删</a>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // 包裹退回收到 → 自动回存库存，并记一条退货流水（口径与「确认退货」一致）
+        function receiveReject(id) {
+            const r = (appData.rejects || []).find(x => String(x.id) === String(id));
+            if (!r) return;
+            if (r.received) { showToast('该拒收件已收到过了'); return; }
+            const key = r.name.toLowerCase();
+            if (!appData.products[key]) appData.products[key] = { name: r.name, cost: 0, stock: 0 };
+            appData.products[key].stock += r.qty;
+            const fee = r.price * r.qty * getFeeRate();
+            addRecord('return', { name: r.name, qty: r.qty, price: r.price, fee, totalReturn: r.price * r.qty + fee });
+            r.received = true;
+            r.receivedAt = new Date().toISOString();
+            saveData();
+            renderRejects();
+            showToast('✅ 已收到并回存库存：' + r.name + ' ×' + r.qty);
+        }
+
+        function delReject(id) {
+            if (!confirm('确定删除这条拒收记录吗？')) return;
+            appData.rejects = (appData.rejects || []).filter(x => String(x.id) !== String(id));
+            saveData();
+            renderRejects();
+        }
+
+        function clearReceivedRejects() {
+            const got = (appData.rejects || []).filter(r => r.received);
+            if (!got.length) { showToast('没有已收到的记录'); return; }
+            if (!confirm('清空 ' + got.length + ' 条已收到的拒收记录？\n\n只清列表，不影响库存和出入库流水。')) return;
+            appData.rejects = (appData.rejects || []).filter(r => !r.received);
+            saveData();
+            renderRejects();
+            showToast('已清空 ' + got.length + ' 条');
+        }
 
         function downloadFile(content, filename, mime) {
             const blob = new Blob([content], { type: mime + ';charset=utf-8' });
