@@ -73,9 +73,33 @@
         .stock-del { display: inline-block; margin-top: 5px; font-size: 0.72rem; color: var(--danger); background: rgba(255,23,68,0.08); border-radius: 4px; padding: 2px 8px; text-decoration: none; cursor: pointer; }
         .stock-del:hover { background: rgba(255,23,68,0.15); }
 
+        /* ===== 商品图片（缩略图） ===== */
+        .sg-thumb { width: 42px; height: 42px; border-radius: 6px; object-fit: cover; background: #f2f2f2; flex-shrink: 0; border: 1px solid #eee; }
+        span.sg-thumb { display: flex; align-items: center; justify-content: center; font-size: 1.05rem; color: #c5c5c5; }
+        .sg-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+        .sg-left .sg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .stock-thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #f2f2f2; flex-shrink: 0; border: 1px solid #eee; cursor: pointer; }
+        span.stock-thumb { display: flex; align-items: center; justify-content: center; font-size: 1.45rem; color: #c8c8c8; border: 1px dashed #ddd; }
+        .stock-item-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .stock-item-info .si-text { min-width: 0; }
+        .stock-img { display: inline-block; margin-top: 5px; margin-right: 6px; font-size: 0.72rem; color: var(--info); background: rgba(0,122,255,0.08); border-radius: 4px; padding: 2px 8px; text-decoration: none; cursor: pointer; }
+        .stock-img:hover { background: rgba(0,122,255,0.16); }
+        .stock-img.del { color: var(--danger); background: rgba(255,23,68,0.08); }
+
+        /* ===== 历史查询工具条 ===== */
+        .hist-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 2px 0 6px; }
+        .hist-bar input[type="text"] { flex: 1 1 150px; min-width: 120px; padding: 7px 10px; border-radius: 6px; border: 1px solid #eee; font-size: 0.82rem; }
+        .hist-bar input[type="date"] { padding: 6px 8px; border-radius: 6px; border: 1px solid #eee; font-size: 0.78rem; width: auto; background: #fff; color: #555; }
+        .hist-bar .btn-sm { margin-top: 0; }
+        .hist-sep { color: #bbb; font-size: 0.8rem; }
+        .hist-info { margin-top: 10px; padding: 8px 10px; background: #f8f9fb; border: 1px dashed #e3e6ec; border-radius: 6px; font-size: 0.78rem; color: #7a8296; text-align: center; line-height: 1.75; }
+        .hist-info a { color: var(--primary-color); text-decoration: none; font-weight: bold; }
+        .hist-hint { font-size: 0.72rem; color: #a0a6b4; margin: 0 0 8px; }
+
         /* 采购待收货清单 */
         .purchase-item { display: flex; align-items: center; gap: 10px; background: #fcfcfc; border: 1px solid #eee; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
         .purchase-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; background: transparent; }
+        .purchase-thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid #eee; background: #f2f2f2; }
         .purchase-item.arrived { background: #f6fbf7; border-color: #cdeccd; }
         .purchase-item.arrived .purchase-check { background: var(--success); border-color: var(--success); }
         .purchase-item.stocked { background: #f4f6fb; border-color: #dde3ee; opacity: 0.82; }
@@ -500,7 +524,16 @@
             </div>
             <div class="card" data-page-node-id="JlnofpfzVDBquxxxOW90Pi">
                 <div class="card-header" style="font-size: 1rem; border-left-color: var(--success);" data-page-node-id="kj3lIwqA09iOYAB1zY32Wi">入库历史</div>
-                <div id="listIn" class="record-list" data-page-node-id="awhVRK3qKoHFWZC4Wo0zJv"></div>
+                <div class="hist-bar" data-page-node-id="histInBar01">
+                    <input type="text" id="histKeyIn" placeholder="搜商品名称…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();doHistQuery('in');}" data-page-node-id="histInBar02">
+                    <input type="date" id="histFromIn" data-page-node-id="histInBar03">
+                    <span class="hist-sep" data-page-node-id="histInBar04">至</span>
+                    <input type="date" id="histToIn" data-page-node-id="histInBar05">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="doHistQuery('in')" data-page-node-id="histInBar06">🔍 查询</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="resetHistQuery('in')" data-page-node-id="histInBar07">↺ 重置</button>
+                </div>
+                <div class="hist-hint" data-page-node-id="histInBar08">默认只显示最近 10 条；填条件后可查全部历史，记录一直保存不会丢</div>
+                <div id="listIn" class="record-list" style="margin-top: 6px;" data-page-node-id="awhVRK3qKoHFWZC4Wo0zJv"></div>
             </div>
         </div>
 
@@ -591,7 +624,16 @@
             </div>
             <div class="card" data-page-node-id="4KdTBXaWe9zl1ObZoS1vDj">
                 <div class="card-header" style="font-size: 1rem; border-left-color: var(--primary-color);" data-page-node-id="4o01r9QenLlvXc5exsUgNG">出单历史</div>
-                <div id="listOut" class="record-list" data-page-node-id="1s60BYzwQLsjiXhrXQqD9g"></div>
+                <div class="hist-bar" data-page-node-id="histOutBar01">
+                    <input type="text" id="histKeyOut" placeholder="搜商品名称…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();doHistQuery('out');}" data-page-node-id="histOutBar02">
+                    <input type="date" id="histFromOut" data-page-node-id="histOutBar03">
+                    <span class="hist-sep" data-page-node-id="histOutBar04">至</span>
+                    <input type="date" id="histToOut" data-page-node-id="histOutBar05">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="doHistQuery('out')" data-page-node-id="histOutBar06">🔍 查询</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="resetHistQuery('out')" data-page-node-id="histOutBar07">↺ 重置</button>
+                </div>
+                <div class="hist-hint" data-page-node-id="histOutBar08">默认只显示最近 10 条；填条件后可查全部历史，记录一直保存不会丢</div>
+                <div id="listOut" class="record-list" style="margin-top: 6px;" data-page-node-id="1s60BYzwQLsjiXhrXQqD9g"></div>
             </div>
                     </div>
 
@@ -746,7 +788,7 @@
                         <option value="name" data-page-node-id="DADzPVq7FW6jJGjapSBjnd">按名称</option>
                     </select>
                 </div>
-                <div class="sync-status" style="margin: 0 0 12px; text-align: left;" data-page-node-id="LjXzNa1QCDfPo1fn5kMT7e">💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留</div>
+                <div class="sync-status" style="margin: 0 0 12px; text-align: left;" data-page-node-id="LjXzNa1QCDfPo1fn5kMT7e">💡 每个商品可点「🖼️ 加图片」上传一张照片（自动压缩，不占多少空间）；加了图之后，入库 / 出单 / 采购选商品时会直接显示缩略图，一眼就能认出来，不用一个个看文字<br>💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留</div>
                 <div id="stockList" class="stock-list" data-page-node-id="mo0x63y9hKRifTtiya37h6"></div>
             </div>
 
@@ -821,6 +863,7 @@
                     <button class="btn btn-outline btn-sm" style="color: var(--danger); border-color: rgba(255,23,68,0.4);" onclick="clearAllData()" data-page-node-id="yXA7dtw9uExOnI2PHMHEUV">🗑️ 清空数据</button>
                 </div>
                 <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(this)" data-page-node-id="CBuxQH2y2EESSbu1JBunVg">
+                <input type="file" id="productImgFile" style="display: none;" accept="image/*" onchange="onProductImgChosen(this)" data-page-node-id="prodImgFile01">
             </div>
         </div>
     </main>
@@ -938,7 +981,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-17 12:53';
+        const APP_BUILD = '2026-09-18 21:20';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1017,6 +1060,10 @@
             
             document.getElementById('filterType').addEventListener('change', renderHomeList);
             document.getElementById('stockList').addEventListener('click', function(e) {
+                const delImg = e.target.closest('[data-imgdel]');
+                if (delImg) { removeProductImage(delImg.getAttribute('data-imgdel')); return; }
+                const imgBtn = e.target.closest('[data-img]');
+                if (imgBtn) { pickProductImage(imgBtn.getAttribute('data-img')); return; }
                 const btn = e.target.closest('.stock-del');
                 if (btn) deleteProduct(btn.getAttribute('data-key'));
             });
@@ -1915,9 +1962,12 @@
             const stateText = p.stocked ? '📦 已入库' : (p.arrived ? '✅ 已收货' : '⏳ 待收货');
             const timeAt = p.stocked ? p.stockedAt : p.arrivedAt;
             const timeTag = p.stocked ? '入库 ' : '';
+            const _prod = appData.products[String(p.name || '').toLowerCase()];
+            const thumb = (_prod && _prod.img) ? `<img class="purchase-thumb" src="${_prod.img}" alt="">` : '';
             return `
                 <div class="purchase-item ${p.stocked ? 'stocked' : (p.arrived ? 'arrived' : '')}">
                     <div class="purchase-check" onclick="toggleArrived('${p.id}')">${p.arrived ? '✓' : ''}</div>
+                    ${thumb}
                     <div class="purchase-info">
                         <h4>${esc(p.name)} × ${p.qty}</h4>
                         <p>${stateText}${p.cost > 0 ? ' ｜ 单价¥' + p.cost.toFixed(2) : ''}${p.note ? ' ｜ ' + esc(p.note) : ''}${timeAt ? ' ｜ ' + timeTag + fmtTime(timeAt) : ''}</p>
@@ -2627,6 +2677,74 @@ function findByTracking(rawInput, allowFuzzy) {
             renderRejects();
         }
 
+        /* ==================== 商品图片（上传 / 压缩 / 更换 / 移除） ==================== */
+        let imgTargetKey = null;
+
+        // 把用户选的照片压成小图（最长边 320px、JPEG 0.72），避免把本地存储撑爆
+        function compressImage(file, maxSize, quality, cb) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const img = new Image();
+                img.onload = function () {
+                    try {
+                        let w = img.width, h = img.height;
+                        const scale = Math.min(1, maxSize / Math.max(w, h));
+                        w = Math.max(1, Math.round(w * scale));
+                        h = Math.max(1, Math.round(h * scale));
+                        const c = document.createElement('canvas');
+                        c.width = w; c.height = h;
+                        const ctx = c.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(img, 0, 0, w, h);
+                        cb(c.toDataURL('image/jpeg', quality));
+                    } catch (err) {
+                        cb(e.target.result); // 压缩失败就退回原图
+                    }
+                };
+                img.onerror = function () { cb(null); };
+                img.src = e.target.result;
+            };
+            reader.onerror = function () { cb(null); };
+            reader.readAsDataURL(file);
+        }
+
+        function pickProductImage(key) {
+            if (!appData.products[key]) return;
+            imgTargetKey = key;
+            const inp = document.getElementById('productImgFile');
+            if (!inp) return;
+            inp.value = '';
+            inp.click();
+        }
+
+        function onProductImgChosen(input) {
+            const f = input && input.files && input.files[0];
+            if (!f) return;
+            const key = imgTargetKey;
+            if (!key || !appData.products[key]) { imgTargetKey = null; if (input) input.value = ''; return; }
+            showToast('正在处理图片…');
+            compressImage(f, 320, 0.72, function (dataUrl) {
+                if (input) input.value = '';
+                imgTargetKey = null;
+                if (!dataUrl) { showToast('图片读取失败，换一张试试'); return; }
+                if (!appData.products[key]) return;
+                appData.products[key].img = dataUrl;
+                saveData();
+                renderAllLists();
+                showToast('图片已保存，选商品时就能看到啦');
+            });
+        }
+
+        function removeProductImage(key) {
+            if (!appData.products[key]) return;
+            if (!confirm('确定移除「' + appData.products[key].name + '」的图片吗？')) return;
+            delete appData.products[key].img;
+            saveData();
+            renderAllLists();
+            showToast('已移除图片');
+        }
+
         function getStockSort() {
             return localStorage.getItem('pddStockSort') || 'value';
         }
@@ -2659,11 +2777,21 @@ function findByTracking(rawInput, allowFuzzy) {
                 const zero = p.stock <= 0.0001;
                 const low = !zero && p.stock <= 5;
                 const tag = zero ? '<span class="stock-tag tag-danger">缺货</span>' : (low ? '<span class="stock-tag tag-warn">库存偏低</span>' : '');
+                const thumb = p.img
+                    ? `<img class="stock-thumb" src="${p.img}" alt="" data-img="${esc(key)}">`
+                    : `<span class="stock-thumb" title="还没有图片">📦</span>`;
+                const imgBtn = p.img
+                    ? `<a href="javascript:void(0)" class="stock-img" data-img="${esc(key)}">🖼️ 换图</a><a href="javascript:void(0)" class="stock-img del" data-imgdel="${esc(key)}">移除图</a>`
+                    : `<a href="javascript:void(0)" class="stock-img" data-img="${esc(key)}">🖼️ 加图片</a>`;
                 html += `
                 <div class="stock-item">
                     <div class="stock-item-info">
-                        <h4>${esc(p.name)}${tag}</h4>
-                        <p>库存: ${p.stock.toFixed(2)} 件</p>
+                        ${thumb}
+                        <div class="si-text">
+                            <h4>${esc(p.name)}${tag}</h4>
+                            <p>库存: ${p.stock.toFixed(2)} 件</p>
+                            <div>${imgBtn}</div>
+                        </div>
                     </div>
                     <div class="stock-item-value">
                         <div class="total-val">¥${totalVal.toFixed(2)}</div>
@@ -2675,12 +2803,89 @@ function findByTracking(rawInput, allowFuzzy) {
             container.innerHTML = html;
         }
 
+        /* ===== 历史记录：默认只显示最近 10 条，其余全部保留，可按条件查询 ===== */
+        const HIST_LIMIT = 10;
+        const HIST_MAX_SHOW = 500;
+        const histQuery = { in: { active: false, key: '', from: '', to: '' }, out: { active: false, key: '', from: '', to: '' } };
+
+        function histEls(type) {
+            const T = type === 'in' ? 'In' : 'Out';
+            return {
+                key: document.getElementById('histKey' + T),
+                from: document.getElementById('histFrom' + T),
+                to: document.getElementById('histTo' + T)
+            };
+        }
+
+        function doHistQuery(type) {
+            const el = histEls(type);
+            const q = histQuery[type] || (histQuery[type] = { active: false, key: '', from: '', to: '' });
+            q.key = el.key ? el.key.value.trim() : '';
+            q.from = el.from ? el.from.value : '';
+            q.to = el.to ? el.to.value : '';
+            q.active = true;
+            renderTabList('list' + (type === 'in' ? 'In' : 'Out'), type);
+        }
+
+        function resetHistQuery(type) {
+            const el = histEls(type);
+            if (el.key) el.key.value = '';
+            if (el.from) el.from.value = '';
+            if (el.to) el.to.value = '';
+            histQuery[type] = { active: false, key: '', from: '', to: '' };
+            renderTabList('list' + (type === 'in' ? 'In' : 'Out'), type);
+        }
+
+        function tsOf(r) {
+            const t = new Date(r && r.timestamp).getTime();
+            return isNaN(t) ? 0 : t;
+        }
+
+        function filterRecords(list, q) {
+            let out = list;
+            const kw = String(q.key || '').trim().toLowerCase();
+            if (kw) out = out.filter(r => String(r.name || '').toLowerCase().includes(kw));
+            if (q.from) {
+                const t0 = new Date(q.from + 'T00:00:00').getTime();
+                if (!isNaN(t0)) out = out.filter(r => tsOf(r) >= t0);
+            }
+            if (q.to) {
+                const t1 = new Date(q.to + 'T23:59:59').getTime();
+                if (!isNaN(t1)) out = out.filter(r => tsOf(r) <= t1);
+            }
+            return out;
+        }
+
         function renderTabList(containerId, type) {
             const container = document.getElementById(containerId);
-            const list = appData.records.filter(r => r.type === type);
-            
-            if (list.length === 0) {
+            if (!container) return;
+            const limited = (type === 'in' || type === 'out');
+            const q = limited ? histQuery[type] : null;
+            const all = appData.records.filter(r => r.type === type).sort((a, b) => tsOf(b) - tsOf(a));
+            let list = all;
+            let infoHtml = '';
+            if (limited) {
+                if (q && q.active) {
+                    const matched = filterRecords(all, q);
+                    const extra = matched.length - HIST_MAX_SHOW;
+                    list = matched.slice(0, HIST_MAX_SHOW);
+                    infoHtml = `<div class="hist-info">🔍 筛选结果 <b>${list.length}${extra > 0 ? '+' : ''}</b> 条${extra > 0 ? '（超出 ' + HIST_MAX_SHOW + ' 条，仅显示前 ' + HIST_MAX_SHOW + ' 条）' : ''}　·　该栏目全部历史共 ${all.length} 条，记录一直保存着<br><a href="javascript:void(0)" onclick="resetHistQuery('${type}')">↺ 收起筛选，只看最近 ${HIST_LIMIT} 条</a></div>`;
+                } else {
+                    list = all.slice(0, HIST_LIMIT);
+                    if (all.length > HIST_LIMIT) {
+                        infoHtml = `<div class="hist-info">仅显示最近 ${HIST_LIMIT} 条　·　该栏目共 ${all.length} 条历史（全部保存着，不会丢）<br><a href="javascript:void(0)" onclick="doHistQuery('${type}')">🔍 查看全部 / 按条件查询 →</a></div>`;
+                    } else if (all.length > 0) {
+                        infoHtml = `<div class="hist-info">共 ${all.length} 条历史（全部保存着）</div>`;
+                    }
+                }
+            }
+
+            if (all.length === 0) {
                 container.innerHTML = '<div style="text-align: center; color: #999; padding: 10px;">暂无记录</div>';
+                return;
+            }
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 10px;">没有符合条件的记录</div>' + infoHtml;
                 return;
             }
 
@@ -2726,7 +2931,7 @@ function findByTracking(rawInput, allowFuzzy) {
                     </div>
                 </div>`;
             });
-            container.innerHTML = html;
+            container.innerHTML = html + infoHtml;
         }
 
         function renderFeeList() {
@@ -2859,6 +3064,13 @@ function findByTracking(rawInput, allowFuzzy) {
             return map[type] || map.in;
         }
 
+        // 商品缩略图 HTML（下拉选择时用），没图时显示占位图标
+        function productThumb(p) {
+            return (p && p.img)
+                ? `<img class="sg-thumb" src="${p.img}" alt="">`
+                : `<span class="sg-thumb">📦</span>`;
+        }
+
         // 选中某个商品后的附加动作
         function afterPickProduct(type, p) {
             if (type === 'out') {
@@ -2909,7 +3121,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 const p = appData.products[k];
                 const div = document.createElement('div');
                 div.className = 'suggestion-item';
-                div.innerHTML = `<div>${esc(p.name)}</div><div><small>存:${p.stock.toFixed(2)}</small> <span>均:${p.cost.toFixed(2)}</span></div>`;
+                div.innerHTML = `<div class="sg-left">${productThumb(p)}<span class="sg-name">${esc(p.name)}</span></div><div style="text-align:right; flex-shrink:0;"><small>存:${p.stock.toFixed(2)}</small> <span>均:${p.cost.toFixed(2)}</span></div>`;
                 div.onclick = () => {
                     input.value = p.name;
                     box.style.display = 'none';
@@ -2937,7 +3149,7 @@ function findByTracking(rawInput, allowFuzzy) {
                         const p = appData.products[k];
                         const div = document.createElement('div');
                         div.className = 'suggestion-item';
-                        div.innerHTML = `<div>${esc(p.name)}</div><div><small>存:${p.stock.toFixed(2)}</small> <span>本:${p.cost.toFixed(2)}</span></div>`;
+                        div.innerHTML = `<div class="sg-left">${productThumb(p)}<span class="sg-name">${esc(p.name)}</span></div><div style="text-align:right; flex-shrink:0;"><small>存:${p.stock.toFixed(2)}</small> <span>本:${p.cost.toFixed(2)}</span></div>`;
                         div.onclick = () => {
                             document.getElementById(inputId).value = p.name;
                             box.style.display = 'none';
