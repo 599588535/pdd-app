@@ -1005,7 +1005,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-18 21:45';
+        const APP_BUILD = '2026-09-18 23:35';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -2036,8 +2036,12 @@
             if (p.courier) tags.push('<span class="courier-tag">🚚 ' + esc(p.courier) + '</span>');
             if (p.trackingNo) tags.push('<span class="track-tag">📦 ' + esc(p.trackingNo) + '</span>');
             const stateText = p.stocked ? '📦 已入库' : (p.arrived ? '✅ 已收货' : '⏳ 待收货');
-            const timeAt = p.stocked ? p.stockedAt : p.arrivedAt;
-            const timeTag = p.stocked ? '入库 ' : '';
+            // 时间：录入时间始终显示（就是「几点添加的」），收货/入库时间到了再补上
+            const timeParts = [];
+            if (p.createdAt) timeParts.push('🕐 录入 ' + fmtTime(p.createdAt));
+            if (p.arrivedAt) timeParts.push('✅ 收货 ' + fmtTime(p.arrivedAt));
+            if (p.stocked && p.stockedAt) timeParts.push('📦 入库 ' + fmtTime(p.stockedAt));
+            const timeTag = timeParts.map(t => ' ｜ ' + t).join('');
             const _prod = appData.products[String(p.name || '').toLowerCase()];
             const thumb = (_prod && _prod.img) ? `<img class="purchase-thumb" src="${_prod.img}" alt="">` : '';
             return `
@@ -2046,7 +2050,7 @@
                     ${thumb}
                     <div class="purchase-info">
                         <h4>${esc(p.name)} × ${p.qty}</h4>
-                        <p>${stateText}${p.cost > 0 ? ' ｜ 单价¥' + p.cost.toFixed(2) : ''}${p.note ? ' ｜ ' + esc(p.note) : ''}${timeAt ? ' ｜ ' + timeTag + fmtTime(timeAt) : ''}</p>
+                        <p>${stateText}${p.cost > 0 ? ' ｜ 单价¥' + p.cost.toFixed(2) : ''}${p.note ? ' ｜ ' + esc(p.note) : ''}${timeTag}</p>
                         ${tags.length ? '<div>' + tags.join('') + '</div>' : ''}
                     </div>
                     <div class="purchase-actions">
@@ -2153,8 +2157,13 @@
         function fmtTime(iso) {
             const d = new Date(iso);
             if (isNaN(d.getTime())) return '';
-            return (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
-                   String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            // 今天 / 昨天 更直观，更早的显示 月/日
+            const dayOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+            const diff = Math.round((dayOf(new Date()) - dayOf(d)) / 86400000);
+            if (diff === 0) return '今天 ' + hm;
+            if (diff === 1) return '昨天 ' + hm;
+            return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
         }
 
         function normTrack(s) {
