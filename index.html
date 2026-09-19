@@ -368,9 +368,10 @@
                 <span class="stat-label" data-page-node-id="9Y7WvPNbif1OIRXRKWWdw5">预估毛利 (含手续费/费用)</span>
                 <span class="stat-value" id="totalProfit" data-page-node-id="CpD3YHy5G1ZgklZiOH5EZP">¥0.00</span>
                 <span class="stat-sub" id="profitRate" data-page-node-id="0xmunjbSQlgicYHkYrjETp">利润率: 0%</span>
+                <span class="stat-sub" id="grossSub" data-page-node-id="grossSub01"></span>
             </div>
             <div class="stat-item" data-page-node-id="pureProfitCard01">
-                <span class="stat-label" data-page-node-id="pureProfitCard02">销售利润 (不含运费/手续费)</span>
+                <span class="stat-label" data-page-node-id="pureProfitCard02">销售利润 (已扣手续费，不含运费)</span>
                 <span class="stat-value" id="pureProfit" data-page-node-id="pureProfitCard03">¥0.00</span>
                 <span class="stat-sub" id="pureProfitRate" data-page-node-id="pureProfitCard04">利润率: 0%</span>
             </div>
@@ -1032,7 +1033,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-19 21:45';
+        const APP_BUILD = '2026-09-19 22:20';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1855,7 +1856,13 @@
             const fee = price * qty * getFeeRate();
             const totalReturn = price * qty + fee;
 
-            addRecord('return', { name, qty, price, fee, totalReturn });
+            // 记下退回商品的单件成本：货退回库存了，成本要还回来，
+            // 退款对利润的影响只是「这单的利润」，不是整个货价。
+            const retCost = (appData.products[key].cost > 0)
+                ? appData.products[key].cost
+                : lastOutCost(name);
+
+            addRecord('return', { name, qty, price, cost: retCost, fee, totalReturn });
         });
 
         document.getElementById('formShip').addEventListener('submit', (e) => {
@@ -1938,11 +1945,33 @@
             return null;
         }
 
+        // 该商品最近一次出单的记录成本（退货时用来估算退回商品的成本）
+        function lastOutCost(name) {
+            const k = String(name || '').toLowerCase();
+            const rec = (appData.records || []).find(r =>
+                r.type === 'out' && String(r.name || '').toLowerCase() === k && (r.cost || 0) > 0);
+            return rec ? (rec.cost || 0) : 0;
+        }
+
+        // 退货记录对应的「单件成本」：
+        //   1) 退货时记下的成本（新记录都有）；
+        //   2) 老记录没记 → 用该商品当前成本均价兜底；
+        //   3) 再不行 → 用最近一次出单的成本。
+        function returnUnitCost(r) {
+            if (r && r.cost != null && !isNaN(parseFloat(r.cost))) return parseFloat(r.cost) || 0;
+            const k = String((r && r.name) || '').toLowerCase();
+            const p = (appData.products || {})[k];
+            if (p && p.cost > 0) return p.cost;
+            return lastOutCost(r && r.name);
+        }
+
         function updateDashboard() {
             let sales = 0; let shipping = 0; let profit = 0; let totalCost = 0; let stockCostTotal = 0;
             let feeTotal = 0; let expenseTotal = 0; let orderCount = 0; let refundTotal = 0;
-            // 销售利润（不含运费/手续费）：只用「销售额 − 商品成本」，不扣运费、不扣手续费
-            let pureSales = 0; let pureCost = 0;
+            // 销售利润（已扣手续费，不含运费/其他支出）
+            let pureSales = 0;    // 卖出货款（含被退回那部分，退货时再冲掉）
+            let pureCost = 0;     // 卖出商品成本（同上）
+            let returnedCost = 0; // 退货退回库存的那部分成本 → 要还回来
             const range = getDashRange();
 
             appData.records.forEach(r => {
@@ -1953,27 +1982,28 @@
 
                 if (r.type === 'out') {
                     sales += (r.price * r.qty) - (r.fee || 0);
-                    profit += r.profit || 0;
                     totalCost += r.cost * r.qty;
                     feeTotal += r.fee || 0;
                     orderCount++;
                     pureSales += (r.price || 0) * (r.qty || 0);
                     pureCost += (r.cost || 0) * (r.qty || 0);
                 } else if (r.type === 'ship') {
-                    shipping += r.qty; totalCost += r.qty; profit -= r.qty;
+                    shipping += r.qty; totalCost += r.qty;
                 } else if (r.type === 'expense') {
-                    expenseTotal += r.qty; totalCost += r.qty; profit -= r.qty;
+                    expenseTotal += r.qty; totalCost += r.qty;
                 } else if (r.type === 'return') {
                     const amt = r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
                     sales -= amt;
                     refundTotal += amt;
-                    // 退货冲减销售额（按商品货款部分，不含退的手续费），与「不含手续费」口径一致
+                    // 退货：这笔销售不算数 → 货款冲掉
                     pureSales -= (r.price || 0) * (r.qty || 0);
+                    // 但货是退回来重新入库的，成本要跟着还回来。
+                    // ⇒ 退款对利润的影响 = 这笔订单的「利润」，而不是整个货价。
+                    returnedCost += returnUnitCost(r) * (r.qty || 0);
                 }
             });
 
             Object.values(appData.products).forEach(p => { stockCostTotal += p.stock * p.cost; });
-            let rate = 0; if (sales > 0) rate = (profit / sales) * 100;
 
             // 采购待收货（还没入库存的）按采购价计入「代入库价值」
             let pendingValue = 0;
@@ -1983,12 +2013,24 @@
             });
             const stockTotalValue = stockCostTotal + pendingValue;
 
-            // 销售利润（不含运费/手续费）= 销售额（不含手续费）− 商品成本
-            const pureProfitVal = pureSales - pureCost;
-            const pureRate = pureSales > 0 ? (pureProfitVal / pureSales) * 100 : 0;
+            // 销售利润（已扣手续费，不含运费/其他支出）
+            //   = 卖出货款 − 卖出商品成本（退货退回库存的那部分成本要还回来）− 手续费
+            const pureProfitVal = (pureSales - pureCost + returnedCost) - feeTotal;
+            const pureSalesNet = pureSales - feeTotal;   // 销售额口径：已扣手续费、已扣退款
+            const pureRate = pureSalesNet > 0 ? (pureProfitVal / pureSalesNet) * 100 : 0;
+
+            // 预估毛利（含手续费/费用）= 销售利润 − 运费 − 其他支出
+            profit = pureProfitVal - shipping - expenseTotal;
+            let rate = 0; if (sales > 0) rate = (profit / sales) * 100;
 
             document.getElementById('totalProfit').innerText = `¥${profit.toFixed(2)}`;
             document.getElementById('profitRate').innerText = `利润率: ${rate.toFixed(1)}% ｜ ${orderCount} 笔出单 ｜ 退款 ¥${refundTotal.toFixed(0)}`;
+            // 把预估毛利的算式直接摊出来，方便一眼核对（= 销售利润 再扣运费/其他支出）
+            const elGrossSub = document.getElementById('grossSub');
+            if (elGrossSub) {
+                elGrossSub.innerText = `= 销售利润 ¥${pureProfitVal.toFixed(2)} − 运费 ¥${shipping.toFixed(2)}`
+                    + ` − 其他 ¥${expenseTotal.toFixed(2)}`;
+            }
             document.getElementById('totalSales').innerText = `¥${sales.toFixed(2)}`;
             document.getElementById('totalCost').innerText = `¥${totalCost.toFixed(2)}`;
             document.getElementById('stockCost').innerText = `¥${stockTotalValue.toFixed(2)}`;
@@ -1998,8 +2040,8 @@
             if (elPP) elPP.innerText = `¥${pureProfitVal.toFixed(2)}`;
             const elPR = document.getElementById('pureProfitRate');
             if (elPR) {
-                elPR.innerText = pureSales > 0
-                    ? `利润率: ${pureRate.toFixed(1)}% ｜ 销售额 ¥${pureSales.toFixed(0)}`
+                elPR.innerText = pureSalesNet > 0
+                    ? `利润率: ${pureRate.toFixed(1)}% ｜ 销售额(已扣手续费/退款) ¥${pureSalesNet.toFixed(0)}`
                     : `利润率: — ｜ 无可比销售额`;
             }
             document.getElementById('totalShipping').innerText = `¥${shipping.toFixed(2)}`;
@@ -3618,9 +3660,13 @@ function findByTracking(rawInput, allowFuzzy) {
             if (r.received) { showToast('该拒收件已收到过了'); return; }
             const key = r.name.toLowerCase();
             if (!appData.products[key]) appData.products[key] = { name: r.name, cost: 0, stock: 0 };
+            // 退回商品的单件成本（同 formReturn 口径）：货回库存，成本要还回来
+            const retCost = (appData.products[key].cost > 0)
+                ? appData.products[key].cost
+                : lastOutCost(r.name);
             appData.products[key].stock += r.qty;
             const fee = r.price * r.qty * getFeeRate();
-            addRecord('return', { name: r.name, qty: r.qty, price: r.price, fee, totalReturn: r.price * r.qty + fee });
+            addRecord('return', { name: r.name, qty: r.qty, price: r.price, cost: retCost, fee, totalReturn: r.price * r.qty + fee });
             r.received = true;
             r.receivedAt = new Date().toISOString();
             saveData();
@@ -3857,6 +3903,9 @@ function findByTracking(rawInput, allowFuzzy) {
                     otherExp += r.qty; profit -= r.qty;
                 } else if (r.type === 'return') {
                     refundTotal += r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
+                    // 与经营概览同口径：退款只冲掉这笔订单的利润
+                    // （货退回库存，成本要还回来，不是整单价）
+                    profit -= ((r.price || 0) * (r.qty || 0) - returnUnitCost(r) * (r.qty || 0));
                 }
             });
             const netSales = grossSales - refundTotal;
@@ -3974,13 +4023,17 @@ function findByTracking(rawInput, allowFuzzy) {
                 }
             }
             recs.forEach(r => {
-                if (r.type !== 'out' && r.type !== 'ship' && r.type !== 'expense') return;
+                if (r.type !== 'out' && r.type !== 'ship' && r.type !== 'expense' && r.type !== 'return') return;
                 const t = new Date(r.timestamp);
                 const key = useMonth
                     ? (t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'))
                     : ((t.getMonth() + 1) + '/' + t.getDate());
                 if (!(key in map)) return;
                 if (r.type === 'out') map[key] += (r.profit || 0);
+                else if (r.type === 'return') {
+                    // 与概览同口径：退货只冲掉这笔订单的利润
+                    map[key] -= ((r.price || 0) * (r.qty || 0) - returnUnitCost(r) * (r.qty || 0));
+                }
                 else map[key] -= r.qty;
             });
             let list = order.map(k => ({ label: k, value: +map[k].toFixed(2) }));
