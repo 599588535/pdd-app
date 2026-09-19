@@ -256,6 +256,19 @@
             .record-item:hover { background: #fdf7f7; }
         }
 
+        /* ==================== 出单 · 实时利润提示 ==================== */
+        .out-profit-box { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; background: #f6fbf7; border: 1px dashed #bfe3c6; border-radius: var(--radius); padding: 8px 12px; margin: -2px 0 10px; }
+        .out-profit-box.warn { background: #fffaf0; border-color: #f0dcae; }
+        .out-profit-box .op-label { font-size: 0.75rem; color: #888; }
+        .out-profit-box .op-amt { font-size: 1.05rem; font-weight: bold; color: var(--success); }
+        .out-profit-box .op-amt.neg { color: var(--danger); }
+        .out-profit-box .op-rate { font-size: 0.85rem; font-weight: bold; color: var(--success); }
+        .out-profit-box .op-rate.neg { color: var(--danger); }
+        .out-profit-box .op-note { font-size: 0.7rem; color: #999; width: 100%; line-height: 1.5; }
+
+        /* 经营概览 · 库存价值拆分小字 */
+        .stat-sub .sub-sep { opacity: 0.6; margin: 0 2px; }
+
         /* ==================== 收货核销 / 快递单号 ==================== */
         .scan-box { background: #f0f7ff; border: 1px solid #cfe4fb; border-radius: var(--radius); padding: 12px; margin: 15px 0 10px; }
         .scan-title { font-size: 0.85rem; font-weight: bold; color: var(--info); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
@@ -355,6 +368,11 @@
                 <span class="stat-value" id="totalProfit" data-page-node-id="CpD3YHy5G1ZgklZiOH5EZP">¥0.00</span>
                 <span class="stat-sub" id="profitRate" data-page-node-id="0xmunjbSQlgicYHkYrjETp">利润率: 0%</span>
             </div>
+            <div class="stat-item" data-page-node-id="pureProfitCard01">
+                <span class="stat-label" data-page-node-id="pureProfitCard02">销售利润 (不含运费/手续费)</span>
+                <span class="stat-value" id="pureProfit" data-page-node-id="pureProfitCard03">¥0.00</span>
+                <span class="stat-sub" id="pureProfitRate" data-page-node-id="pureProfitCard04">利润率: 0%</span>
+            </div>
             <div class="stat-item" data-page-node-id="HPn5s5MSwbv9pV9E0oTTGm">
                 <span class="stat-label" data-page-node-id="jBrmhjDfiBFGE9zGYuEZXz">销售额(实收)</span>
                 <span class="stat-value" id="totalSales" data-page-node-id="0DzdQQA2Ps16JEwlmGq9lt">¥0</span>
@@ -364,8 +382,9 @@
                 <span class="stat-value" id="totalCost" data-page-node-id="LzHPVCHGkDiZ56J4TMCRFg">¥0</span>
             </div>
             <div class="stat-item" data-page-node-id="jUwi8mTNEwPu5s6zdD72hE">
-                <span class="stat-label" data-page-node-id="goBFEntrxzIAK4bms5x6Iy">库存总价值</span>
+                <span class="stat-label" data-page-node-id="goBFEntrxzIAK4bms5x6Iy">库存总价值 (含待收货)</span>
                 <span class="stat-value" id="stockCost" data-page-node-id="vPppiSpGI69gKUmOF7xyqF">¥0</span>
+                <span class="stat-sub" id="stockCostSub" data-page-node-id="stockCostSub01">在库 ¥0 <span class="sub-sep">｜</span> 待收货 ¥0</span>
             </div>
             <div class="stat-item" data-page-node-id="EuWbtsBagnjEmkKm5AtXfY">
                 <span class="stat-label" data-page-node-id="fl8GrZG5K9UttvvOqhtH7D">运费支出</span>
@@ -571,7 +590,7 @@
                     
                     <div class="form-group" data-page-node-id="8I8BMhoTHgaArGaZyZ6i0a">
                         <label data-page-node-id="6gHE0PndWgHPwOH0ttGBPr">销售方式</label>
-                        <select id="outSaleType" onchange="toggleSaleType()" data-page-node-id="ETc5GkwPHUs5n0VYpRQr1t">
+                        <select id="outSaleType" onchange="toggleSaleType(); updateOutProfit();" data-page-node-id="ETc5GkwPHUs5n0VYpRQr1t">
                             <option value="whole" data-page-node-id="Ug50nVDHTEf8TFcN7jXQLA">整套销售</option>
                             <option value="split" data-page-node-id="xFtJ1evxc8PfOX28EfA75J">拆分销售</option>
                         </select>
@@ -580,7 +599,7 @@
                     <div id="splitSaleOptions" style="display: none;" data-page-node-id="UPnhzGrluqJ0GN77ZXAqgK">
                         <div class="form-group" data-page-node-id="SHuccHVcLHoHZpEfP1fSfB">
                             <label data-page-node-id="n0QSBjYn9XwIPOha1I6FQ1">单套拆分小件数量</label>
-                            <input type="number" id="outSplitQty" placeholder="例如：4" min="1" data-page-node-id="Db2Rx6WGmh0wx5TqBUDjWy">
+                            <input type="number" id="outSplitQty" placeholder="例如：4" min="1" oninput="updateOutProfit()" data-page-node-id="Db2Rx6WGmh0wx5TqBUDjWy">
                             <small style="color:#999; font-size:0.8rem;" data-page-node-id="19WvoIJ7VngiELjU2ZsA69">*一个完整套装包含多少个小件</small>
                         </div>
                     </div>
@@ -593,12 +612,19 @@
                     
                     <div class="form-group" data-page-node-id="hvlPvOcHnJjMsykhg0HxsM">
                         <label data-page-node-id="w0IkS6pYFvqRvE6pBZpeA2">卖出单价 (元)</label>
-                        <input type="number" id="outPrice" placeholder="0.00" step="0.01" data-page-node-id="tdnqVxwMbB6CeFAtWg8hK1">
+                        <input type="number" id="outPrice" placeholder="0.00" step="0.01" oninput="updateOutProfit()" data-page-node-id="tdnqVxwMbB6CeFAtWg8hK1">
                     </div>
                     
                     <div class="form-group" data-page-node-id="XNra9w4hl65jiqNjHYgU3T">
                         <label data-page-node-id="Fc7NepJ8BnkUu0bFWBuC1M">卖出数量</label>
-                        <input type="number" id="outQty" placeholder="0" data-page-node-id="zpgTqgs4FEwYKz3dmi3IIu">
+                        <input type="number" id="outQty" placeholder="0" oninput="updateOutProfit()" data-page-node-id="zpgTqgs4FEwYKz3dmi3IIu">
+                    </div>
+
+                    <div class="out-profit-box" id="outProfitLive" data-page-node-id="outProfitLive01">
+                        <span class="op-label" data-page-node-id="outProfitLive02">利润</span>
+                        <span class="op-amt" id="outProfitAmt" data-page-node-id="outProfitLive03">¥0.00</span>
+                        <span class="op-rate" id="outProfitRate" data-page-node-id="outProfitLive04">利润率 0%</span>
+                        <span class="op-note" id="outProfitNote" data-page-node-id="outProfitLive05">销售额 − 货成本（不含运费/手续费）</span>
                     </div>
                     <button type="submit" class="btn btn-primary" data-page-node-id="PNit2j32KuqJjbTM4erDwQ">确认出单</button>
                 </form>
@@ -1005,7 +1031,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-18 23:35';
+        const APP_BUILD = '2026-09-19 19:50';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1556,6 +1582,41 @@
             }
         }
 
+        // 出单实时利润：利润额 = 销售额 − 货成本（不含运费/手续费），利润率 = 利润 ÷ 销售额
+        function updateOutProfit() {
+            const box = document.getElementById('outProfitLive');
+            if (!box) return;
+            const num = id => { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : 0; };
+            const price = num('outPrice');
+            const qty = num('outQty');
+            const wholeCost = num('outCost');
+            const saleTypeEl = document.getElementById('outSaleType');
+            const saleType = saleTypeEl ? saleTypeEl.value : 'whole';
+            const splitQty = saleType === 'split' ? num('outSplitQty') : 1;
+
+            const unitCost = saleType === 'split' ? (splitQty > 0 ? wholeCost / splitQty : 0) : wholeCost;
+            const revenue = price * qty;
+            const cost = unitCost * qty;
+            const profit = revenue - cost;
+            const rate = revenue > 0 ? (profit / revenue) * 100 : 0;
+            const noCost = revenue > 0 && unitCost <= 0;
+
+            const elA = document.getElementById('outProfitAmt');
+            const elR = document.getElementById('outProfitRate');
+            const elN = document.getElementById('outProfitNote');
+            const neg = profit < 0;
+            if (elA) { elA.innerText = (neg ? '-¥' : '¥') + Math.abs(profit).toFixed(2); elA.className = 'op-amt' + (neg ? ' neg' : ''); }
+            if (elR) { elR.innerText = '利润率 ' + (revenue > 0 ? rate.toFixed(1) + '%' : '0%'); elR.className = 'op-rate' + (neg ? ' neg' : ''); }
+            if (elN) {
+                elN.innerText = noCost
+                    ? '⚠️ 未设置成本价，利润会偏高'
+                    : (revenue > 0
+                        ? '销售额 ¥' + revenue.toFixed(2) + ' − 货成本 ¥' + cost.toFixed(2) + '（不含运费/手续费）'
+                        : '销售额 − 货成本（不含运费/手续费）');
+            }
+            box.className = 'out-profit-box' + (noCost ? ' warn' : '');
+        }
+
         document.getElementById('formOut').addEventListener('submit', (e) => {
             e.preventDefault();
             const name = document.getElementById('outName').value.trim();
@@ -1874,6 +1935,8 @@
         function updateDashboard() {
             let sales = 0; let shipping = 0; let profit = 0; let totalCost = 0; let stockCostTotal = 0;
             let feeTotal = 0; let expenseTotal = 0; let orderCount = 0; let refundTotal = 0;
+            // 销售利润（不含运费/手续费）：只用「销售额 − 商品成本」，不扣运费、不扣手续费
+            let pureSales = 0; let pureCost = 0;
             const range = getDashRange();
 
             appData.records.forEach(r => {
@@ -1888,6 +1951,8 @@
                     totalCost += r.cost * r.qty;
                     feeTotal += r.fee || 0;
                     orderCount++;
+                    pureSales += (r.price || 0) * (r.qty || 0);
+                    pureCost += (r.cost || 0) * (r.qty || 0);
                 } else if (r.type === 'ship') {
                     shipping += r.qty; totalCost += r.qty; profit -= r.qty;
                 } else if (r.type === 'expense') {
@@ -1896,17 +1961,41 @@
                     const amt = r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
                     sales -= amt;
                     refundTotal += amt;
+                    // 退货冲减销售额（按商品货款部分，不含退的手续费），与「不含手续费」口径一致
+                    pureSales -= (r.price || 0) * (r.qty || 0);
                 }
             });
 
             Object.values(appData.products).forEach(p => { stockCostTotal += p.stock * p.cost; });
             let rate = 0; if (sales > 0) rate = (profit / sales) * 100;
 
+            // 采购待收货（还没入库存的）按采购价计入「代入库价值」
+            let pendingValue = 0;
+            (appData.purchases || []).forEach(p => {
+                if (p.stocked) return;   // 已入库的已算进「在库」，避免重复计算
+                pendingValue += (parseFloat(p.cost) || 0) * (parseFloat(p.qty) || 0);
+            });
+            const stockTotalValue = stockCostTotal + pendingValue;
+
+            // 销售利润（不含运费/手续费）= 销售额（不含手续费）− 商品成本
+            const pureProfitVal = pureSales - pureCost;
+            const pureRate = pureSales > 0 ? (pureProfitVal / pureSales) * 100 : 0;
+
             document.getElementById('totalProfit').innerText = `¥${profit.toFixed(2)}`;
             document.getElementById('profitRate').innerText = `利润率: ${rate.toFixed(1)}% ｜ ${orderCount} 笔出单 ｜ 退款 ¥${refundTotal.toFixed(0)}`;
             document.getElementById('totalSales').innerText = `¥${sales.toFixed(2)}`;
             document.getElementById('totalCost').innerText = `¥${totalCost.toFixed(2)}`;
-            document.getElementById('stockCost').innerText = `¥${stockCostTotal.toFixed(2)}`;
+            document.getElementById('stockCost').innerText = `¥${stockTotalValue.toFixed(2)}`;
+            const elsSub = document.getElementById('stockCostSub');
+            if (elsSub) elsSub.innerHTML = '在库 ¥' + stockCostTotal.toFixed(2) + ' <span class="sub-sep">｜</span> 待收货 ¥' + pendingValue.toFixed(2);
+            const elPP = document.getElementById('pureProfit');
+            if (elPP) elPP.innerText = `¥${pureProfitVal.toFixed(2)}`;
+            const elPR = document.getElementById('pureProfitRate');
+            if (elPR) {
+                elPR.innerText = pureSales > 0
+                    ? `利润率: ${pureRate.toFixed(1)}% ｜ 销售额 ¥${pureSales.toFixed(0)}`
+                    : `利润率: — ｜ 无可比销售额`;
+            }
             document.getElementById('totalShipping').innerText = `¥${shipping.toFixed(2)}`;
             document.getElementById('totalExpense').innerText = `¥${expenseTotal.toFixed(2)}`;
             document.getElementById('totalFee').innerText = `¥${feeTotal.toFixed(2)}`;
@@ -3162,6 +3251,7 @@ function findByTracking(rawInput, allowFuzzy) {
             if (type === 'out') {
                 const c = document.getElementById('outCost');
                 if (c) c.value = p.cost.toFixed(2);
+                updateOutProfit();
             } else if (type === 'pur') {
                 // 采购：单价为空时，用库存均价预填，可随时改
                 const c = document.getElementById('purCost');
@@ -3565,6 +3655,7 @@ function findByTracking(rawInput, allowFuzzy) {
                     if(fId === 'formOut') document.getElementById('outCost').value = '';
                 }
             });
+            updateOutProfit();   // 表单已重置 → 实时利润同步归零
             document.getElementById('shipDate').value = todayStr();
             document.getElementById('expenseDate').value = todayStr();
 
@@ -3830,7 +3921,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 const restVal = total - top.reduce((s, x) => s + x.v, 0);
                 html += `<div class="trend-summary">其余 ${arr.length - 5} 种商品合计 ¥${restVal.toFixed(2)}</div>`;
             }
-            html += `<div class="trend-summary">库存总价值: ¥${total.toFixed(2)}</div>`;
+            html += `<div class="trend-summary">在库总价值: ¥${total.toFixed(2)}（不含采购待收货）</div>`;
             box.innerHTML = html;
         }
     </script>
