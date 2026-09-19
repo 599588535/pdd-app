@@ -207,6 +207,7 @@
         .stock-tag { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 8px; margin-left: 5px; vertical-align: 1px; }
         .tag-danger { background: rgba(255,23,68,0.1); color: var(--danger); }
         .tag-warn { background: rgba(255,152,0,0.12); color: #e65100; }
+        .tag-mute { background: #f2f2f2; color: #888; }
 
         /* ===== 快捷操作（电脑端工作台） ===== */
         .quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -833,7 +834,7 @@
                         <option value="name" data-page-node-id="DADzPVq7FW6jJGjapSBjnd">按名称</option>
                     </select>
                 </div>
-                <div class="sync-status" style="margin: 0 0 12px; text-align: left;" data-page-node-id="LjXzNa1QCDfPo1fn5kMT7e">💡 每个商品可点「🖼️ 加图片」上传一张照片（自动压缩，不占多少空间）；加了图之后，入库 / 出单 / 采购选商品时会直接显示缩略图，一眼就能认出来，不用一个个看文字<br>💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留</div>
+                <div class="sync-status" style="margin: 0 0 12px; text-align: left;" data-page-node-id="LjXzNa1QCDfPo1fn5kMT7e">💡 每个商品可点「🖼️ 加图片」上传一张照片（自动压缩，不占多少空间）；加了图之后，入库 / 出单 / 采购选商品时会直接显示缩略图，一眼就能认出来，不用一个个看文字<br>💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留<br>💡 0 库存的商品会显示「N 天后自动清理」：连续 7 天没库存就自动从本表移除（历史流水照样保留）；只要还有「待收货」的采购单就不会被清，补货后倒计时自动取消</div>
                 <div id="stockList" class="stock-list" data-page-node-id="mo0x63y9hKRifTtiya37h6"></div>
             </div>
 
@@ -1031,7 +1032,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-19 19:50';
+        const APP_BUILD = '2026-09-19 21:45';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1107,7 +1108,10 @@
             
             updateDashboard();
             renderAllLists();
-            
+
+            // 每次打开页面体检一次 0 库存商品（连续 7 天没库存的自动清理，历史流水保留）
+            runZeroStockMaintenance(true);
+
             document.getElementById('filterType').addEventListener('change', renderHomeList);
             document.getElementById('stockList').addEventListener('click', function(e) {
                 const delImg = e.target.closest('[data-imgdel]');
@@ -1136,6 +1140,8 @@
         function saveData() {
             appData.updatedAt = Date.now();
             if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
+            // 0 库存商品：库存变 0 时开始计时，连续 7 天没库存就自动清理（历史流水保留）
+            try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
             localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
             updateDashboard();
             renderStockList();
@@ -2023,6 +2029,17 @@
             if (lock) { try { localStorage.setItem('pddPurLock', keepLock ? '1' : '0'); } catch (e) {} }
             if (!name) { alert('请输入商品名称'); return; }
             if (qty <= 0) { alert('请输入有效的数量'); return; }
+
+            // 采购待收货：名字填好就顺手在「库存总览」里建好商品（0 库存占位，到货入库时补数量）
+            const purKey = name.toLowerCase();
+            let createdNew = false;
+            if (!appData.products[purKey]) {
+                appData.products[purKey] = { name: name, cost: cost > 0 ? cost : 0, stock: 0 };
+                createdNew = true;
+            } else if (cost > 0 && !(appData.products[purKey].cost > 0)) {
+                appData.products[purKey].cost = cost;   // 只补空缺，不覆盖已有均价
+            }
+
             if (!appData.purchases) appData.purchases = [];
             appData.purchases.unshift({
                 id: genId(), name, qty, cost, note,
@@ -2046,9 +2063,9 @@
                 if (cost > 0) {
                     // 用户本次输入了单价 → 沿用本次
                     elCost.value = cost.toString();
-                } else if (name && appData.products[name] && appData.products[name].cost > 0) {
+                } else if (name && appData.products[purKey] && appData.products[purKey].cost > 0) {
                     // 本次没填但商品库里有均价 → 自动回填作参考
-                    elCost.value = appData.products[name].cost.toString();
+                    elCost.value = appData.products[purKey].cost.toString();
                 }
             }
 
@@ -2064,8 +2081,35 @@
 
             renderPurchases();
             const tipName = name.length > 14 ? name.slice(0, 14) + '…' : name;
-            showToast('已加入：' + tipName + '（表单已保留，直接改数量回车即可）');
+            showToast(createdNew
+                ? '已加入并新建商品：' + tipName + '（已在库存总览，库存 0）'
+                : '已加入：' + tipName + '（表单已保留，直接改数量回车即可）');
         });
+
+        // 待收货：商品名一填好（输入框内容变了并离开焦点）就自动在库存总览建好商品
+        function autoCreateProductFromName(rawName, cost) {
+            const name = String(rawName || '').trim();
+            if (!name) return false;
+            const key = name.toLowerCase();
+            if (appData.products[key]) return false;
+            const c = parseFloat(cost) || 0;
+            appData.products[key] = { name: name, cost: c > 0 ? c : 0, stock: 0 };
+            syncZeroSince();
+            saveData();
+            return true;
+        }
+
+        (function () {
+            const el = document.getElementById('purName');
+            if (!el) return;
+            el.addEventListener('change', function () {
+                const c = document.getElementById('purCost');
+                if (autoCreateProductFromName(this.value, c ? c.value : 0)) {
+                    const n = this.value.trim();
+                    showToast('已自动新建商品：' + (n.length > 12 ? n.slice(0, 12) + '…' : n) + '（库存总览里可查）');
+                }
+            });
+        })();
 
         function toggleArrived(id) {
             const p = (appData.purchases || []).find(x => String(x.id) === String(id));
@@ -2920,6 +2964,78 @@ function findByTracking(rawInput, allowFuzzy) {
             showToast('已移除图片');
         }
 
+        /* ==================== 0 库存商品自动清理（连续 7 天没库存 → 从库存总览移除） ====================
+           规则：
+           · 库存掉到 0 的那一刻开始计时（zeroSince），一旦补货就清掉计时；
+           · 连续 7 天仍是 0 库存 → 自动从「库存总览」删除；
+           · 只要该商品还有「待收货」的采购单，就先不删（货还在路上）；
+           · 出入库/销售历史流水一条都不会动，仍可按条件查询。 */
+        const ZERO_PURGE_DAYS = 7;
+        const ZERO_PURGE_MS = ZERO_PURGE_DAYS * 24 * 60 * 60 * 1000;
+
+        function stockNum(p) {
+            const v = parseFloat(p && p.stock);
+            return isNaN(v) ? 0 : v;
+        }
+
+        function hasPendingPurchase(name) {
+            const k = String(name || '').toLowerCase();
+            if (!k) return false;
+            return (appData.purchases || []).some(p => !p.stocked && String(p.name || '').toLowerCase() === k);
+        }
+
+        function syncZeroSince() {
+            const nowIso = new Date().toISOString();
+            Object.keys(appData.products || {}).forEach(k => {
+                const p = appData.products[k];
+                if (!p) return;
+                if (stockNum(p) <= 0.0001) {
+                    if (!p.zeroSince) p.zeroSince = nowIso;
+                } else if (p.zeroSince) {
+                    delete p.zeroSince;
+                }
+            });
+        }
+
+        // 返回还有几天被清理；null = 不参与自动清理
+        function zeroDaysLeft(p) {
+            if (!p || !p.zeroSince) return null;
+            const t = new Date(p.zeroSince).getTime();
+            if (isNaN(t)) return null;
+            return Math.max(0, Math.ceil((ZERO_PURGE_MS - (Date.now() - t)) / (24 * 60 * 60 * 1000)));
+        }
+
+        function purgeZeroStock() {
+            const removed = [];
+            Object.keys(appData.products || {}).forEach(k => {
+                const p = appData.products[k];
+                if (!p) return;
+                if (stockNum(p) > 0.0001) return;
+                if (!p.zeroSince) return;
+                const t = new Date(p.zeroSince).getTime();
+                if (isNaN(t) || Date.now() - t < ZERO_PURGE_MS) return;
+                if (hasPendingPurchase(p.name)) return;
+                removed.push(p.name);
+                delete appData.products[k];
+            });
+            if (removed.length) appData.isSeed = false;
+            return removed;
+        }
+
+        // 打开页面 / 进「管理」页时跑一遍
+        function runZeroStockMaintenance(notify) {
+            syncZeroSince();
+            const removed = purgeZeroStock();
+            if (removed.length) {
+                saveData();
+                if (notify !== false) {
+                    showToast('已自动清理 ' + removed.length + ' 个 0 库存超 ' + ZERO_PURGE_DAYS + ' 天的商品（历史记录保留）');
+                }
+            }
+            if (document.getElementById('stockList')) renderStockList();
+            return removed;
+        }
+
         function getStockSort() {
             return localStorage.getItem('pddStockSort') || 'value';
         }
@@ -2951,7 +3067,18 @@ function findByTracking(rawInput, allowFuzzy) {
                 const totalVal = p.stock * p.cost;
                 const zero = p.stock <= 0.0001;
                 const low = !zero && p.stock <= 5;
-                const tag = zero ? '<span class="stock-tag tag-danger">缺货</span>' : (low ? '<span class="stock-tag tag-warn">库存偏低</span>' : '');
+                let tag = '';
+                if (zero) {
+                    tag = '<span class="stock-tag tag-danger">缺货</span>';
+                    if (hasPendingPurchase(p.name)) {
+                        tag += '<span class="stock-tag tag-warn">有待收货，暂不清理</span>';
+                    } else {
+                        const left = zeroDaysLeft(p);
+                        if (left != null) tag += `<span class="stock-tag tag-mute">${left} 天后自动清理</span>`;
+                    }
+                } else if (low) {
+                    tag = '<span class="stock-tag tag-warn">库存偏低</span>';
+                }
                 const thumb = p.img
                     ? `<img class="stock-thumb" src="${p.img}" alt="" data-img="${esc(key)}">`
                     : `<span class="stock-thumb" title="还没有图片">📦</span>`;
@@ -3270,21 +3397,33 @@ function findByTracking(rawInput, allowFuzzy) {
             if (document.activeElement === input) input.blur();
         }
 
+        // 下拉选项来源 = 「库存总览」现有商品（appData.products），总览里没有的不会出现在选项里，
+        // 只能手动输入名称。出单额外过滤掉 0 库存（0 库存本来也出不了单）。
+        function stockListKeys() {
+            return Object.keys(appData.products || {}).filter(k => {
+                const p = appData.products[k];
+                return !!p && !!String(p.name || '').trim();
+            });
+        }
+
+        function suggestEmptyHTML(type) {
+            if (type === 'out') return '<div class="suggestion-empty">库存总览里没有可出单的商品（0 库存不能出单）</div>';
+            if (type === 'in') return '<div class="suggestion-empty">库存总览里还没有这个商品，直接输入名称即可（会自动新建）</div>';
+            return '<div class="suggestion-empty">库存总览里没有匹配的商品，直接输入名称即可</div>';
+        }
+
         function showSuggestions(type) {
             const [inputId, boxId] = ddIds(type);
             const input = document.getElementById(inputId);
             const box = document.getElementById(boxId);
             if (!input || !box) return;
 
-            let keys = Object.keys(appData.products).sort();
+            let keys = stockListKeys().sort();
             // 出单只能选有库存的商品
             if (type === 'out') keys = keys.filter(k => appData.products[k].stock > 0.0001);
             if (keys.length === 0) {
-                if (type === 'out') {
-                    box.innerHTML = '<div class="suggestion-empty">暂无有库存的商品，请先入库</div>';
-                    box.style.display = 'block';
-                } else if (type === 'pur' || type === 'rej') {
-                    box.innerHTML = '<div class="suggestion-empty">管理里还没有商品，可先直接输入名称</div>';
+                if (type === 'out' || type === 'pur' || type === 'rej' || type === 'in') {
+                    box.innerHTML = suggestEmptyHTML(type);
                     box.style.display = 'block';
                 } else {
                     box.style.display = 'none';
@@ -3317,7 +3456,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 const box = document.getElementById(boxId);
                 if (!box) return;
                 if (!val) { showSuggestions(type); return; }
-                let matches = Object.keys(appData.products).filter(k => k.includes(val));
+                let matches = stockListKeys().filter(k => k.includes(val));
                 if (type === 'out') matches = matches.filter(k => appData.products[k].stock > 0.0001);
                 box.innerHTML = '';
                 if (matches.length > 0) {
@@ -3334,11 +3473,11 @@ function findByTracking(rawInput, allowFuzzy) {
                         box.appendChild(div);
                     });
                     box.style.display = 'block';
-                } else if (type === 'out') {
-                    box.innerHTML = '<div class="suggestion-empty">没有匹配的有库存商品</div>';
-                    box.style.display = 'block';
-                } else if (type === 'pur' || type === 'rej') {
-                    box.innerHTML = '<div class="suggestion-empty">没有匹配的商品，可直接输入新名字</div>';
+                } else if (type === 'out' || type === 'pur' || type === 'rej' || type === 'in' || type === 'return') {
+                    // 库存总览里没有 → 不给选项（这里只提示，名称照旧手动输入即可）
+                    box.innerHTML = type === 'out'
+                        ? '<div class="suggestion-empty">库存总览里没有匹配的有库存商品</div>'
+                        : '<div class="suggestion-empty">库存总览里没有这个商品，直接输入即可</div>';
                     box.style.display = 'block';
                 } else { box.style.display = 'none'; }
             });
@@ -3620,6 +3759,8 @@ function findByTracking(rawInput, allowFuzzy) {
             // 红色「经营概览」数据块只在首页显示 —— 其它页面隐藏，省掉一大块重复内容，直接看到表单
             showDashboard(tabId === 'home');
             if (tabId === 'stats') renderStats();
+            // 进「管理」页（库存总览）时再体检一次 0 库存商品
+            if (tabId === 'manage') { try { runZeroStockMaintenance(false); } catch (e) {} }
             window.scrollTo(0, 0);
         }
 
