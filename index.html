@@ -184,6 +184,10 @@
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; font-size: 0.9rem; z-index: 300; display: none; }
         .sync-status { font-size: 0.8rem; color: #666; margin-top: 10px; text-align: center; }
 
+        /* ===== 云端连通诊断（手机拉取失败时用） ===== */
+        .sync-diag { display: none; font-size: 0.74rem; line-height: 1.5; color: #444; background: #f6f8fa; border: 1px solid #e3e8ee; border-radius: 6px; padding: 8px 10px; margin-top: 8px; white-space: pre-wrap; word-break: break-all; max-height: 190px; overflow: auto; text-align: left; }
+        .sync-diag.show { display: block; }
+
         /* ===== 统计分析 ===== */
         .mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 5px; }
         .mini-stat { background: #fafafa; border: 1px solid #f0f0f0; border-radius: var(--radius); padding: 10px 2px; text-align: center; }
@@ -880,12 +884,17 @@
                     <label data-page-node-id="mSwtPrhlMJ0wwP53taaPN7">Personal Access Token</label>
                     <input type="password" id="ghToken" placeholder="ghp_..." data-page-node-id="S3PbnBPv35XicVADacsbwq">
                 </div>
-                <div style="display: flex; gap: 10px; margin-bottom: 10px;" data-page-node-id="TkvsBXBWXZPrUm5LqfzOzS">
+                <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;" data-page-node-id="TkvsBXBWXZPrUm5LqfzOzS">
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="saveGithubConfig()" data-page-node-id="QUjtDiWoLHZxFbaW2NwLzV">💾 保存配置</button>
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="pushToGithub()" data-page-node-id="PeHXFIT3HdT6LycCnnmYqx">⬆️ 推送到云端</button>
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="pullFromGithub()" data-page-node-id="uZtD5mm8Wu78jUlOOGyKGS">⬇️ 从云端拉取</button>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="testCloudChannels()" data-page-node-id="cfDiagBtn1">🔌 云端连通测试</button>
                 </div>
                 <div class="sync-status" id="syncStatus" data-page-node-id="34szYHwI6lvP1lCX8XUV2I">未同步</div>
+                <div class="sync-diag" id="syncDiag" data-page-node-id="cfDiagBox1"></div>
+                <div id="syncDiagTools" style="display: none; gap: 10px; margin-top: 8px;" data-page-node-id="cfDiagTools1">
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="copySyncDiag()" data-page-node-id="cfDiagCopy1">📋 复制测试结果</button>
+                </div>
                 <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;" data-page-node-id="uixiUWFIf0lk6RPdXWpLbx">*配置并保存后自动开启：修改约3秒后自动上传，打开页面自动拉取云端较新数据<br data-page-node-id="YlNrBTOAv9Up7UizHgTMyA">*建议数据仓库存<b data-page-node-id="zBXF85AjZDzgAzmeFvinKQ">私有</b>仓库（数据不公开），程序文件可放公开仓库生成网址供手机访问</small>
             </div>
 
@@ -1033,7 +1042,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-19 22:20';
+        const APP_BUILD = '2026-09-20 09:20';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1217,6 +1226,70 @@
         function githubDataUrl() {
             return `https://api.github.com/repos/${ghConfig.user}/${ghConfig.repo}/contents/${FILE_NAME}`;
         }
+        function githubRawUrl(branch) {
+            return `https://raw.githubusercontent.com/${ghConfig.user}/${ghConfig.repo}/${branch}/${FILE_NAME}?t=${Date.now()}`;
+        }
+        function githubCdnUrl(branch) {
+            return `https://cdn.jsdelivr.net/gh/${ghConfig.user}/${ghConfig.repo}@${branch}/${FILE_NAME}?t=${Date.now()}`;
+        }
+
+        /* 云端下载的多条通道。
+           手机在国内经常连不上 api.github.com（返回 200 但内容为空 → 报 "Unexpected EOF"），
+           所以除了官方 API，再准备两个免 Token 的直链通道兜底。 */
+        function cloudChannels() {
+            const list = [
+                { name: 'GitHub API（官方）', kind: 'api', url: githubDataUrl(), headers: { Authorization: 'token ' + ghConfig.token } },
+                { name: 'raw 直链 main', kind: 'file', url: githubRawUrl('main') },
+                { name: 'raw 直链 master', kind: 'file', url: githubRawUrl('master') },
+                { name: 'jsDelivr(main)', kind: 'file', url: githubCdnUrl('main') },
+                { name: 'jsDelivr(master)', kind: 'file', url: githubCdnUrl('master') }
+            ];
+            // 上次成功的通道排最前：手机上有时候只有某一条通，避免每次都先白等不通的那几条
+            let pref = '';
+            try { pref = localStorage.getItem('pddCloudChannel') || ''; } catch (e) {}
+            if (pref) {
+                const idx = list.findIndex(c => c.name === pref);
+                if (idx > 0) list.unshift(list.splice(idx, 1)[0]);
+            }
+            return list;
+        }
+
+        function rememberCloudChannel(name) {
+            try { localStorage.setItem('pddCloudChannel', name || ''); } catch (e) {}
+        }
+
+        // 带超时的请求：手机弱网下请求会长时间挂住，必须能主动放弃
+        async function fetchWithTimeout(url, opt, ms) {
+            let ctrl = null;
+            try { ctrl = new AbortController(); } catch (e) { ctrl = null; }
+            let timer = null;
+            if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, ms || 12000);
+            const o = Object.assign({}, opt || {});
+            if (ctrl) o.signal = ctrl.signal;
+            try {
+                return await fetch(url, o);
+            } finally {
+                if (timer) clearTimeout(timer);
+            }
+        }
+
+        // 安全地读 JSON：响应体为空时给出人话提示（这正是手机上报 "Unexpected EOF" 的真相）
+        async function readJsonSafe(res, tag) {
+            let text = '';
+            try { text = await res.text(); }
+            catch (e) { throw new Error(tag + '：读取内容失败（' + (e.message || e) + '）'); }
+            if (!text || !text.trim()) {
+                throw new Error(tag + '：返回了空内容（HTTP ' + res.status + '，手机网络被拦截的典型表现）');
+            }
+            try { return JSON.parse(text); }
+            catch (e) {
+                const head = text.replace(/\s+/g, ' ').slice(0, 90);
+                throw new Error(tag + '：返回的不是数据（HTTP ' + res.status + '）→ ' + head);
+            }
+        }
+
+        let lastCloudChannel = '';   // 最近一次成功拉取走的通道名，用于提示
+        let cloudDiagText = '';      // 最近一次连通测试的结果，供复制
         function setSyncStatus(t) {
             const el = document.getElementById('syncStatus');
             if (el) el.innerText = t;
@@ -1456,13 +1529,55 @@
             uploadData(false);
         }
 
+        // 依次尝试各条通道，谁先成功用谁；全部失败时把每条通道的结果汇总抛出来，便于定位
         async function fetchCloud() {
-            const res = await fetch(githubDataUrl(), { headers: { Authorization: `token ${ghConfig.token}` } });
-            if (res.status === 404) { cachedSha = ''; return { notFound: true }; }
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const data = await res.json();
-            cachedSha = data.sha;
-            return JSON.parse(base64ToUtf8(data.content.replace(/\n/g, '')));
+            const channels = cloudChannels();
+            const fails = [];
+            for (let i = 0; i < channels.length; i++) {
+                const ch = channels[i];
+                let res;
+                try {
+                    res = await fetchWithTimeout(ch.url, { headers: ch.headers || {}, cache: 'no-store' }, 12000);
+                } catch (e) {
+                    fails.push(ch.name + ' → 网络不通（' + ((e && e.name === 'AbortError') ? '超时无响应' : (e.message || e)) + '）');
+                    continue;
+                }
+
+                if (ch.kind === 'api') {
+                    // 只有官方 API 的 404 才等于「云端还没数据」；直链的 404 也可能只是分支名不对
+                    if (res.status === 404) { cachedSha = ''; return { notFound: true }; }
+                    if (res.status === 401 || res.status === 403) {
+                        fails.push(ch.name + ' → HTTP ' + res.status + '（Token 无权限或已失效）');
+                        continue;
+                    }
+                    if (!res.ok) { fails.push(ch.name + ' → HTTP ' + res.status); continue; }
+                    let j;
+                    try { j = await readJsonSafe(res, ch.name); }
+                    catch (e) { fails.push(e.message); continue; }
+                    const content = String((j && j.content) || '').replace(/\s/g, '');
+                    if (!content) { fails.push(ch.name + ' → 返回内容为空（云端文件可能不完整）'); continue; }
+                    let cloud;
+                    try { cloud = JSON.parse(base64ToUtf8(content)); }
+                    catch (e) { fails.push(ch.name + ' → 云端数据解析失败：' + e.message); continue; }
+                    cachedSha = j.sha || cachedSha;
+                    lastCloudChannel = ch.name;
+                    rememberCloudChannel(ch.name);
+                    return cloud;
+                }
+
+                // 免 Token 的直链通道：返回的就是 JSON 文件原文
+                if (res.status === 404) { fails.push(ch.name + ' → HTTP 404（该分支不存在，或仓库是私有的读不到）'); continue; }
+                if (!res.ok) { fails.push(ch.name + ' → HTTP ' + res.status); continue; }
+                let cloud;
+                try { cloud = await readJsonSafe(res, ch.name); }
+                catch (e) { fails.push(e.message); continue; }
+                cachedSha = null;   // 直链拿不到 sha，下次推送时自动重新查询
+                lastCloudChannel = ch.name;
+                rememberCloudChannel(ch.name);
+                return cloud;
+            }
+            throw new Error('所有通道都拉不到云端数据：\n' + fails.map(t => '• ' + t).join('\n') +
+                '\n\n建议：切换一下网络（WiFi ⇄ 手机流量）再试；或点「🔌 云端连通测试」把结果发给开发者。');
         }
 
         function adoptCloud(cloud) {
@@ -1509,17 +1624,116 @@
         async function pullFromGithub() {
             if (!syncConfigured()) { showToast('请先填写并保存 GitHub 配置'); return; }
             setSyncStatus('正在拉取...');
+            lastCloudChannel = '';
             try {
                 const cloud = await fetchCloud();
                 if (cloud.notFound) { setSyncStatus('❌ 云端无数据'); alert('云端还没有数据文件'); return; }
                 adoptCloud(cloud);
                 renderAllLists();
-                setSyncStatus('✅ 拉取成功！');
-                showToast('已从云端恢复数据');
+                const via = lastCloudChannel ? '（通道：' + lastCloudChannel + '）' : '';
+                setSyncStatus('✅ 拉取成功' + via);
+                showToast('已从云端恢复数据' + via);
             } catch (error) {
-                setSyncStatus('❌ 拉取失败');
+                setSyncStatus('❌ 拉取失败（详细原因见下方）');
+                // 把每条通道的结果留在页面上，方便复制/截图反馈
+                try {
+                    const d = document.getElementById('syncDiag');
+                    const t = document.getElementById('syncDiagTools');
+                    if (d) { d.innerText = '拉取失败：\n' + error.message; d.classList.add('show'); }
+                    if (t) t.style.display = 'flex';
+                } catch (e) {}
                 alert('拉取失败:\n' + error.message);
             }
+        }
+
+        // 逐条通道测一遍，把结果摊在页面上：手机到底哪条路不通，一看便知
+        async function testCloudChannels() {
+            const d = document.getElementById('syncDiag');
+            const tools = document.getElementById('syncDiagTools');
+            const lines = [];
+            const put = () => { if (d) { d.innerText = lines.join('\n'); d.classList.add('show'); } };
+
+            if (!syncConfigured()) {
+                lines.push('⚠️ 请先填写「GitHub 用户名 / 仓库名称 / Token」，点「💾 保存配置」后再测试。');
+                put(); cloudDiagText = lines.join('\n');
+                if (tools) tools.style.display = 'flex';
+                return;
+            }
+            if (d) d.classList.add('show');
+            if (tools) tools.style.display = 'flex';
+            lines.push('云端连通测试 · 页面版本 ' + APP_BUILD);
+            lines.push('仓库：' + ghConfig.user + '/' + ghConfig.repo + '　文件：' + FILE_NAME);
+            lines.push('时间：' + new Date().toLocaleString('zh-CN', { hour12: false }));
+            lines.push('');
+            put();
+            setSyncStatus('🔌 正在测试各通道...');
+
+            const channels = cloudChannels();
+            let okCount = 0, firstOk = '';
+            for (let i = 0; i < channels.length; i++) {
+                const ch = channels[i];
+                const t0 = Date.now();
+                let line = '';
+                try {
+                    const res = await fetchWithTimeout(ch.url, { headers: ch.headers || {}, cache: 'no-store' }, 12000);
+                    if (res.status === 404) {
+                        line = '✗ HTTP 404（分支或文件不存在，或仓库是私有的读不到）';
+                    } else if (!res.ok) {
+                        line = '✗ HTTP ' + res.status;
+                    } else {
+                        let text = '';
+                        try { text = await res.text(); } catch (e) { text = ''; }
+                        if (!text.trim()) {
+                            line = '✗ 200 但内容为空 ← 手机网络被拦截的典型表现';
+                        } else {
+                            let valid = false;
+                            try { const o = JSON.parse(text); valid = !!(o && (o.products || o.records)); } catch (e) {}
+                            const kb = Math.round(text.length / 1024 * 10) / 10;
+                            line = '✓ 正常' + (valid ? '，已识别为有效数据' : '（内容不是本应用的数据文件）') + '　' + kb + ' KB';
+                            if (valid) { okCount++; if (!firstOk) { firstOk = ch.name; rememberCloudChannel(ch.name); } }
+                        }
+                    }
+                } catch (e) {
+                    line = '✗ ' + ((e && e.name === 'AbortError') ? '超时无响应' : (e.message || e));
+                }
+                lines.push(String(i + 1) + '. ' + ch.name + '：' + line + '　' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
+                put();
+            }
+
+            lines.push('');
+            if (okCount === 0) {
+                lines.push('结论：全部通道都失败 → 手机当前网络访问不了 GitHub。');
+                lines.push('请换一下网络（WiFi ⇄ 手机流量）后再测；换网络仍全失败，说明这个网络需要代理才能上 GitHub。');
+                setSyncStatus('❌ 全部通道不通（手机网络访问不了 GitHub）');
+            } else {
+                lines.push('结论：共 ' + okCount + ' 条通道可用，拉取时会自动使用「' + firstOk + '」。');
+                lines.push('若这条通道是 jsDelivr，它是 CDN 缓存，数据可能有延迟；此时建议优先用 WiFi 走官方通道。');
+                setSyncStatus('✅ 有 ' + okCount + ' 条通道可用：' + firstOk);
+            }
+            put();
+            cloudDiagText = lines.join('\n');
+        }
+
+        function copySyncDiag() {
+            const t = cloudDiagText || '';
+            if (!t) { showToast('还没有测试结果'); return; }
+            const done = () => showToast('已复制测试结果');
+            const old = () => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                    document.body.appendChild(ta); ta.select();
+                    document.execCommand('copy'); document.body.removeChild(ta);
+                    done();
+                } catch (e) { showToast('复制失败，请长按上方文字手动复制'); }
+            };
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(t).then(done, old);
+                    return;
+                }
+            } catch (e) {}
+            old();
         }
 
         function flushSyncOnExit() {
