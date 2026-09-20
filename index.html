@@ -1042,7 +1042,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-20 09:20';
+        const APP_BUILD = '2026-09-20 09:31';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1234,11 +1234,15 @@
         }
 
         /* 云端下载的多条通道。
-           手机在国内经常连不上 api.github.com（返回 200 但内容为空 → 报 "Unexpected EOF"），
-           所以除了官方 API，再准备两个免 Token 的直链通道兜底。 */
+           ⚠️ 首选「原始文件」通道：GitHub 的 contents API 有个坑 —— 文件超过 1MB 时
+           不再返回 base64 的 content（只回约 0.9KB 的元数据），于是「看着 200 正常、其实没数据」，
+           下载就会失败。加 Accept: application/vnd.github.raw 后直接返回文件原文，不受这个限制。
+           （本地数据带商品图片 base64，很容易超过 1MB。）
+           后面几条免 Token 直链只对「公开仓库」有效，私有仓库会 404，仅作兜底。 */
         function cloudChannels() {
             const list = [
-                { name: 'GitHub API（官方）', kind: 'api', url: githubDataUrl(), headers: { Authorization: 'token ' + ghConfig.token } },
+                { name: 'GitHub API（原始文件）', kind: 'api', asRaw: true, url: githubDataUrl(), headers: { Authorization: 'token ' + ghConfig.token, Accept: 'application/vnd.github.raw' } },
+                { name: 'GitHub API（base64）', kind: 'api', url: githubDataUrl(), headers: { Authorization: 'token ' + ghConfig.token } },
                 { name: 'raw 直链 main', kind: 'file', url: githubRawUrl('main') },
                 { name: 'raw 直链 master', kind: 'file', url: githubRawUrl('master') },
                 { name: 'jsDelivr(main)', kind: 'file', url: githubCdnUrl('main') },
@@ -1334,14 +1338,14 @@
 
             for (const p of paths) {
                 const url = 'https://api.github.com/repos/' + user + '/' + repo + '/contents/' + p + '?t=' + Date.now();
+                // 用 raw 媒体类型直接取文件原文：网页文件较大时，默认通道会因「超过 1MB 就不给 content」而读不到版本号
+                const rawHeaders = Object.assign({ Accept: 'application/vnd.github.raw' }, headers);
                 let res;
-                try { res = await fetch(url, { headers: headers, cache: 'no-store' }); }
+                try { res = await fetch(url, { headers: rawHeaders, cache: 'no-store' }); }
                 catch (e) { tried.push(p + ' → 网络错误'); continue; }
                 if (res.status === 200) {
-                    let j = null;
-                    try { j = await res.json(); } catch (e) {}
                     let text = '';
-                    try { text = base64ToUtf8(String((j && j.content) || '').replace(/\s/g, '')); } catch (e) { text = ''; }
+                    try { text = await res.text(); } catch (e) { text = ''; }
                     const m = text.match(/APP_BUILD\s*=\s*'([^']+)'/);
                     let commitDate = '';
                     try {
@@ -1352,7 +1356,7 @@
                             if (cj && cj[0] && cj[0].commit && cj[0].commit.committer) commitDate = cj[0].commit.committer.date;
                         }
                     } catch (e) {}
-                    found.push({ path: p, size: (j && j.size) || 0, build: m ? m[1] : '', date: commitDate });
+                    found.push({ path: p, size: text.length, build: m ? m[1] : '', date: commitDate });
                 } else if (res.status === 404) {
                     tried.push(p + ' → 不存在');
                 } else {
@@ -1369,6 +1373,8 @@
 
             const lines = [];
             let allMatch = false;
+            // 本机这份网页的大致字节数，用来对照线上文件有没有传全（不再写死数字）
+            const localKB = Math.round(((document.documentElement && document.documentElement.outerHTML) || '').length / 1024);
             found.forEach((f) => {
                 const same = f.build && f.build === APP_BUILD;
                 if (same) allMatch = true;
@@ -1376,7 +1382,7 @@
                     : (f.build ? '⚠️ ' + f.path + ' ＝ 线上是【旧版本】' : '⚠️ ' + f.path + ' ＝ 线上文件没有版本标记（是更早的老版本）');
                 lines.push(head);
                 lines.push('     线上版本：' + (f.build || '（无）'));
-                lines.push('     文件大小：' + Math.round(f.size / 1024) + ' KB' + (f.size ? '（本地约 564 KB）' : ''));
+                lines.push('     文件大小：' + Math.round(f.size / 1024) + ' KB（本机这份约 ' + localKB + ' KB）');
                 lines.push('     最后更新：' + fmtGhDate(f.date));
             });
 
@@ -1487,9 +1493,14 @@
             const url = githubDataUrl();
             let sha = cachedSha === null ? '' : cachedSha;
             try {
-                const getRes = await fetch(url, { headers: { Authorization: `token ${ghConfig.token}` } });
-                if (getRes.status === 200) sha = (await getRes.json()).sha;
-                else if (getRes.status !== 404) throw new Error('HTTP ' + getRes.status);
+                const getRes = await fetchWithTimeout(url, { headers: { Authorization: `token ${ghConfig.token}` }, cache: 'no-store' }, 12000);
+                if (getRes.status === 200) {
+                    // 用 readJsonSafe：空响应会给出人话错误，而不是看不懂的 JSON 解析报错
+                    const meta = await readJsonSafe(getRes, '读取云端文件信息');
+                    sha = meta.sha || '';
+                } else if (getRes.status !== 404) {
+                    throw new Error('HTTP ' + getRes.status);
+                }
                 cachedSha = sha;
             } catch (e) {
                 if (!silent) alert('网络错误: ' + e.message);
@@ -1498,11 +1509,11 @@
             try {
                 const body = { message: '数据同步 ' + new Date().toLocaleString('zh-CN', { hour12: false }), content: utf8ToBase64(JSON.stringify(appData)) };
                 if (sha) body.sha = sha;
-                const putRes = await fetch(url, {
+                const putRes = await fetchWithTimeout(url, {
                     method: 'PUT',
                     headers: { Authorization: `token ${ghConfig.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
-                });
+                }, 30000);
                 if (putRes.status === 200 || putRes.status === 201) {
                     lastCloudUpdatedAt = appData.updatedAt;
                     setSyncStatus('✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
@@ -1551,6 +1562,20 @@
                         continue;
                     }
                     if (!res.ok) { fails.push(ch.name + ' → HTTP ' + res.status); continue; }
+                    // 「原始文件」通道：响应体就是数据文件本身（没有 1MB 就不给内容的问题）
+                    if (ch.asRaw) {
+                        let cloudRaw;
+                        try { cloudRaw = await readJsonSafe(res, ch.name); }
+                        catch (e) { fails.push(e.message); continue; }
+                        if (!cloudRaw || (!cloudRaw.products && !cloudRaw.records)) {
+                            fails.push(ch.name + ' → 返回的不是本应用的数据（仓库里可能是另一个文件）');
+                            continue;
+                        }
+                        cachedSha = null;   // 这种响应不带 sha，推送时自动重新查询
+                        lastCloudChannel = ch.name;
+                        rememberCloudChannel(ch.name);
+                        return cloudRaw;
+                    }
                     let j;
                     try { j = await readJsonSafe(res, ch.name); }
                     catch (e) { fails.push(e.message); continue; }
@@ -1669,13 +1694,14 @@
             setSyncStatus('🔌 正在测试各通道...');
 
             const channels = cloudChannels();
-            let okCount = 0, firstOk = '';
+            let okCount = 0, firstOk = '', apiReachable = false;
             for (let i = 0; i < channels.length; i++) {
                 const ch = channels[i];
                 const t0 = Date.now();
                 let line = '';
                 try {
                     const res = await fetchWithTimeout(ch.url, { headers: ch.headers || {}, cache: 'no-store' }, 12000);
+                    if (ch.kind === 'api' && res.ok) apiReachable = true;
                     if (res.status === 404) {
                         line = '✗ HTTP 404（分支或文件不存在，或仓库是私有的读不到）';
                     } else if (!res.ok) {
@@ -1686,10 +1712,22 @@
                         if (!text.trim()) {
                             line = '✗ 200 但内容为空 ← 手机网络被拦截的典型表现';
                         } else {
-                            let valid = false;
-                            try { const o = JSON.parse(text); valid = !!(o && (o.products || o.records)); } catch (e) {}
+                            let o = null;
+                            try { o = JSON.parse(text); } catch (e) { o = null; }
                             const kb = Math.round(text.length / 1024 * 10) / 10;
-                            line = '✓ 正常' + (valid ? '，已识别为有效数据' : '（内容不是本应用的数据文件）') + '　' + kb + ' KB';
+                            let valid = false, note = '';
+                            if (o && (o.products || o.records)) {
+                                valid = true;
+                                note = '，已识别为有效数据（' + (o.updatedAt ? '云端时间戳 ' + o.updatedAt + '，' : '') +
+                                       Object.keys(o.products || {}).length + ' 个商品 / ' + (o.records || []).length + ' 条流水）';
+                            } else if (o && typeof o.content === 'string') {
+                                note = o.content
+                                    ? '（GitHub 的 base64 包装格式，程序会自动解开）'
+                                    : '（⚠️ 里面没有文件内容：云端数据超过 1MB 时 GitHub 就不给了 → 请用第 1 条「原始文件」通道）';
+                            } else {
+                                note = '（不是本应用的数据文件）';
+                            }
+                            line = (valid ? '✓ 正常' : '✗ 无法使用') + note + '　' + kb + ' KB';
                             if (valid) { okCount++; if (!firstOk) { firstOk = ch.name; rememberCloudChannel(ch.name); } }
                         }
                     }
@@ -1702,14 +1740,22 @@
 
             lines.push('');
             if (okCount === 0) {
-                lines.push('结论：全部通道都失败 → 手机当前网络访问不了 GitHub。');
-                lines.push('请换一下网络（WiFi ⇄ 手机流量）后再测；换网络仍全失败，说明这个网络需要代理才能上 GitHub。');
-                setSyncStatus('❌ 全部通道不通（手机网络访问不了 GitHub）');
+                if (apiReachable) {
+                    lines.push('结论：官方 API 能连上 GitHub（返回 200），但没取到可用的数据。');
+                    lines.push('说明网络没问题，问题在云端那份文件。请点「⬇️ 从云端拉取」看具体报错，再把它发我。');
+                    setSyncStatus('⚠️ 网络正常，但云端没取到可用数据');
+                } else {
+                    lines.push('结论：全部通道都失败 → 手机当前网络访问不了 GitHub。');
+                    lines.push('请换一下网络（WiFi ⇄ 手机流量）后再测；换网络仍全失败，说明这个网络需要代理才能上 GitHub。');
+                    setSyncStatus('❌ 全部通道不通（手机网络访问不了 GitHub）');
+                }
             } else {
                 lines.push('结论：共 ' + okCount + ' 条通道可用，拉取时会自动使用「' + firstOk + '」。');
-                lines.push('若这条通道是 jsDelivr，它是 CDN 缓存，数据可能有延迟；此时建议优先用 WiFi 走官方通道。');
                 setSyncStatus('✅ 有 ' + okCount + ' 条通道可用：' + firstOk);
             }
+            lines.push('');
+            lines.push('※ 「raw 直链 / jsDelivr」只能读公开仓库；数据仓库设成私有时它们必然 404，属正常现象，');
+            lines.push('   以「GitHub API」那两条的结果为准即可。');
             put();
             cloudDiagText = lines.join('\n');
         }
