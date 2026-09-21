@@ -206,6 +206,23 @@
         #trendCanvas { width: 100%; height: 180px; display: block; }
         .trend-summary { text-align: center; font-size: 0.78rem; color: #888; margin-top: 8px; }
 
+        /* ===== 今日速览（首页顶部小格） ===== */
+        .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
+        .today-note { grid-column: 1 / -1; text-align: center; font-size: 0.75rem; color: #999; margin-top: 2px; }
+
+        /* ===== 按月汇总 / 每月利润对比 ===== */
+        .report-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .report-table th, .report-table td { padding: 7px 6px; border-bottom: 1px solid #f0f0f0; text-align: right; white-space: nowrap; }
+        .report-table th { color: #888; font-weight: normal; background: #fafafa; }
+        .report-table th:first-child, .report-table td:first-child { text-align: left; }
+        .report-table tr.cur-month td { background: #fffdf3; }
+        .mbar { height: 6px; border-radius: 3px; background: #f0f0f0; overflow: hidden; min-width: 60px; margin-top: 4px; }
+        .mbar > i { display: block; height: 100%; border-radius: 3px; background: var(--primary-color); }
+        .mbar > i.neg { background: var(--danger); }
+        .month-cmp { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.78rem; color: #666; }
+        .month-cmp .delta-up { color: var(--primary-color); font-weight: 600; }
+        .month-cmp .delta-down { color: var(--success); font-weight: 600; }
+
         .insight-item { background: #fffde7; border-left: 3px solid var(--warning); border-radius: 4px; padding: 8px 10px; font-size: 0.8rem; color: #6d4c41; margin-bottom: 8px; line-height: 1.5; }
 
         .stock-tag { display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 8px; margin-left: 5px; vertical-align: 1px; }
@@ -355,7 +372,7 @@
                 <select id="dateFilterType" onchange="toggleDateInputs()" data-page-node-id="qn5ADjkoiapAivGuubl4fA">
                     <option value="today" data-page-node-id="wzyESvHYrGoKOnfniYjsle">今日</option>
                     <option value="week" data-page-node-id="THLDeeIYYKXxSlGZ3jzrCE">本周</option>
-                    <option value="month" data-page-node-id="tFsa1NehFz3VGiVQDEjN64">本月</option>
+                    <option value="month" selected data-page-node-id="tFsa1NehFz3VGiVQDEjN64">本月</option>
                     <option value="all" data-page-node-id="2MMEgANJx1pDdmAPiv3H3o">全部</option>
                     <option value="custom" data-page-node-id="eXvVNWxtW2BcvrsEnPZNcZ">自定义</option>
                 </select>
@@ -409,6 +426,11 @@
 
     <main style="margin-top: 15px;" data-page-node-id="qqr8rj7hk1EhRLlun855pI">
         <div id="page-home" class="page active" data-page-node-id="jEtiuPGY12noqQIctdjuk6">
+            <div class="card span-2" data-page-node-id="todayCard01">
+                <div class="card-header" style="font-size: 1rem;" data-page-node-id="todayCard02">☀️ 今日速览 <span style="font-size:0.72rem; color:#999; font-weight:normal;" data-page-node-id="todayCard04">（只看今天，随时间自动更新）</span></div>
+                <div id="todayBox" class="today-grid" data-page-node-id="todayCard03"></div>
+            </div>
+
             <div class="card" data-page-node-id="6jhSTXtnV6CtQeHIXL1MUk">
                 <div class="card-header" data-page-node-id="3BYqOvqyeR2wMOFk2eCrRq">
                     <span data-page-node-id="xm0GCTkyRvr7CJXy2iJsU4">最近记录</span>
@@ -829,6 +851,15 @@
                 <div id="stockRankBox" data-page-node-id="3V7jrFWcApSTZa2xuGYDJE"></div>
             </div>
 
+            <div class="card span-2" data-page-node-id="monthRep01">
+                <div class="card-header" style="font-size: 1rem; border-left-color: var(--purple);" data-page-node-id="monthRep02">📅 每月利润对比（按月看赚了多少）</div>
+                <div id="monthReportBox" data-page-node-id="monthRep03"></div>
+                <div id="monthCmpBox" data-page-node-id="monthRep06"></div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;" data-page-node-id="monthRep04">
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="exportMonthCSV()" data-page-node-id="monthRep05">📥 月报CSV</button>
+                </div>
+            </div>
+
             <div class="card" data-page-node-id="ybfNletFXzzeS7dAuzBB0O">
                 <div class="card-header" style="font-size: 1rem;" data-page-node-id="5Yn4SqrU0edCqZOGRFNp04">📤 报表导出</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;" data-page-node-id="r9G2pY4i3OvXOFAHg7uIQ9">
@@ -1051,7 +1082,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-21 17:26';
+        const APP_BUILD = '2026-09-21 21:34';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1061,6 +1092,12 @@
         function todayStr() {
             const d = new Date();
             return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        // 出单「数量」的统一显示：整数不带小数，小数保留 1 位（拆分销售会出现半件）
+        function fmtQty(v) {
+            const n = parseFloat(v) || 0;
+            return n % 1 === 0 ? String(n) : n.toFixed(1);
         }
 
         function esc(s) {
@@ -1131,6 +1168,18 @@
             // 每次打开页面体检一次 0 库存商品（连续 7 天没库存的自动清理，历史流水保留）
             runZeroStockMaintenance(true);
 
+            // 跨天自动刷新「今日速览」（页面一直开着，第二天不会还显示昨天的数）
+            let lastDayKey = new Date().toDateString();
+            setInterval(() => {
+                const key = new Date().toDateString();
+                if (key === lastDayKey) return;
+                lastDayKey = key;
+                renderTodayCard();
+                const sp = document.getElementById('page-stats');
+                if (sp && sp.classList.contains('active')) renderMonthReport();
+                showToast('已跨天，今日速览已刷新');
+            }, 60000);
+
             document.getElementById('filterType').addEventListener('change', renderHomeList);
             document.getElementById('stockList').addEventListener('click', function(e) {
                 const delImg = e.target.closest('[data-imgdel]');
@@ -1163,6 +1212,7 @@
             try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
             localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
             updateDashboard();
+            renderTodayCard();
             renderStockList();
             const statsPage = document.getElementById('page-stats');
             if (statsPage && statsPage.classList.contains('active')) renderStats();
@@ -1228,6 +1278,13 @@
         let lastCloudUpdatedAt = null;  // 最近一次已知云端版本
         let cachedSha = null;           // 云端文件 sha（'' 表示云端暂无文件）
         let syncBusy = false;
+
+        function fmtTs(ts) {
+            if (!ts) return '未知';
+            const d = new Date(ts);
+            if (isNaN(d.getTime())) return '未知';
+            return fmtGhDate(d.toISOString());
+        }
 
         function syncConfigured() {
             return !!(ghConfig.user && ghConfig.repo && ghConfig.token);
@@ -2237,6 +2294,8 @@
         function updateDashboard() {
             let sales = 0; let shipping = 0; let profit = 0; let totalCost = 0; let stockCostTotal = 0;
             let feeTotal = 0; let expenseTotal = 0; let orderCount = 0; let refundTotal = 0;
+            // 出单按「数量」统计（一个录入可以代表好几个订单，所以件数比条数更贴近真实订单数）
+            let outQtySum = 0;
             // 销售利润（已扣手续费，不含运费/其他支出）
             let pureSales = 0;    // 卖出货款（含被退回那部分，退货时再冲掉）
             let pureCost = 0;     // 卖出商品成本（同上）
@@ -2254,6 +2313,7 @@
                     totalCost += r.cost * r.qty;
                     feeTotal += r.fee || 0;
                     orderCount++;
+                    outQtySum += (parseFloat(r.qty) || 0);
                     pureSales += (r.price || 0) * (r.qty || 0);
                     pureCost += (r.cost || 0) * (r.qty || 0);
                 } else if (r.type === 'ship') {
@@ -2293,7 +2353,7 @@
             let rate = 0; if (sales > 0) rate = (profit / sales) * 100;
 
             document.getElementById('totalProfit').innerText = `¥${profit.toFixed(2)}`;
-            document.getElementById('profitRate').innerText = `利润率: ${rate.toFixed(1)}% ｜ ${orderCount} 笔出单 ｜ 退款 ¥${refundTotal.toFixed(0)}`;
+            document.getElementById('profitRate').innerText = `利润率: ${rate.toFixed(1)}% ｜ 出单 ${fmtQty(outQtySum)} 件 ｜ 退款 ¥${refundTotal.toFixed(0)}`;
             // 把预估毛利的算式直接摊出来，方便一眼核对（= 销售利润 再扣运费/其他支出）
             const elGrossSub = document.getElementById('grossSub');
             if (elGrossSub) {
@@ -3251,6 +3311,7 @@ function findByTracking(rawInput, allowFuzzy) {
 
         function renderAllLists() {
             renderHomeList();
+            renderTodayCard();
             renderTabList('listIn', 'in');
             renderTabList('listOut', 'out');
             renderTabList('listReturn', 'return');
@@ -4118,13 +4179,155 @@ function findByTracking(rawInput, allowFuzzy) {
                 a.profit += r.profit || 0;
                 a.orders++;
             });
-            const rows = [['商品','当前库存','成本均价(元)','库存价值(元)','累计销量(件)','累计销售额(元)','累计利润(元)','出单笔数']];
+            const rows = [['商品','当前库存','成本均价(元)','库存价值(元)','累计销量(件)','累计销售额(元)','累计利润(元)','出单记录数']];
             Object.values(appData.products).forEach(p => {
                 const a = agg[p.name.toLowerCase()] || { qty: 0, sales: 0, profit: 0, orders: 0 };
                 rows.push([p.name, p.stock.toFixed(2), p.cost.toFixed(2), (p.stock * p.cost).toFixed(2), a.qty, a.sales.toFixed(2), a.profit.toFixed(2), a.orders]);
             });
             downloadFile('\uFEFF' + rows.map(r => r.map(csvEsc).join(',')).join('\r\n'), `经营汇总_${todayStr()}.csv`, 'text/csv');
             showToast('汇总CSV已导出');
+        }
+
+        /* ==================== 今日速览（首页顶部，只看今天） ==================== */
+        function todayStartTs() {
+            const now = new Date();
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        }
+
+        // 口径与「经营概览」完全一致：
+        //   出单 → +货款 −货成本 −手续费；退货 → 只冲掉这笔订单的利润，不冲整笔货款
+        function renderTodayCard() {
+            const box = document.getElementById('todayBox');
+            if (!box) return;
+            const start = todayStartTs();
+            let orderCount = 0, qtySold = 0, sales = 0, profit = 0;
+            let retCnt = 0, retAmt = 0, inCnt = 0, shipExp = 0, otherExp = 0;
+            (appData.records || []).forEach(r => {
+                const t = new Date(r.timestamp).getTime();
+                if (isNaN(t) || t < start) return;
+                if (r.type === 'out') {
+                    orderCount++;
+                    qtySold += r.qty || 0;
+                    sales += (r.price || 0) * (r.qty || 0) - (r.fee || 0);
+                    profit += (r.price || 0) * (r.qty || 0) - (r.cost || 0) * (r.qty || 0) - (r.fee || 0);
+                } else if (r.type === 'return') {
+                    retCnt++;
+                    retAmt += (r.totalReturn != null ? r.totalReturn : (r.price || 0) * (r.qty || 0));
+                    sales -= (r.price || 0) * (r.qty || 0);
+                    profit -= ((r.price || 0) - returnUnitCost(r)) * (r.qty || 0);
+                } else if (r.type === 'in') {
+                    inCnt++;
+                } else if (r.type === 'ship') {
+                    shipExp += r.qty || 0;
+                } else if (r.type === 'expense') {
+                    otherExp += r.qty || 0;
+                }
+            });
+            const money = v => '¥' + Number(v || 0).toFixed(2);
+            const items = [
+                { l: '今日出单', v: fmtQty(qtySold) + ' 件' },
+                { l: '今日销售利润', v: money(profit), alert: profit < 0 },
+                { l: '今日销售额', v: orderCount || retCnt ? money(sales) : '—' },
+                { l: '出单记录', v: (orderCount || 0) + ' 条' },
+                { l: '今日入库', v: inCnt ? (inCnt + ' 笔') : '—' },
+                { l: '今日退货', v: retCnt ? (retCnt + ' 笔') : '—' },
+                { l: '今日支出', v: (shipExp + otherExp) ? money(shipExp + otherExp) : '—' }
+            ];
+            box.innerHTML = items.map(it =>
+                '<div class="mini-stat"' + (it.alert ? ' style="background:#fff5f5; border-color:#f7c1c1;"' : '') + '>' +
+                '<span class="v">' + it.v + '</span><span class="l">' + it.l + '</span></div>').join('')
+                + (orderCount ? '' : '<div class="today-note">今天还没有出单记录</div>');
+        }
+
+        /* ==================== 每月利润对比 ==================== */
+        function monthKeyOf(ts) {
+            const d = new Date(ts);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        }
+
+        // 与「经营概览」同口径：销售利润 = 销售额 − 货成本 − 手续费（退货冲减）；预估毛利 = 销售利润 − 运费 − 其他支出
+        function buildMonthRows() {
+            const map = {};
+            (appData.records || []).forEach(r => {
+                const t = new Date(r.timestamp);
+                if (isNaN(t.getTime())) return;
+                const k = monthKeyOf(r.timestamp);
+                const m = map[k] || (map[k] = { key: k, orders: 0, qty: 0, sales: 0, cost: 0, fee: 0, retCnt: 0, retAmt: 0, ship: 0, other: 0, profit: 0, gross: 0 });
+                if (r.type === 'out') {
+                    m.orders++; m.qty += r.qty || 0;
+                    m.sales += (r.price || 0) * (r.qty || 0);
+                    m.cost += (r.cost || 0) * (r.qty || 0);
+                    m.fee += r.fee || 0;
+                } else if (r.type === 'return') {
+                    m.retCnt++;
+                    m.retAmt += (r.totalReturn != null ? r.totalReturn : (r.price || 0) * (r.qty || 0));
+                    m.sales -= (r.price || 0) * (r.qty || 0);
+                    m.cost -= returnUnitCost(r) * (r.qty || 0);
+                } else if (r.type === 'ship') { m.ship += r.qty || 0; }
+                else if (r.type === 'expense') { m.other += r.qty || 0; }
+            });
+            return Object.keys(map).sort().reverse().map(k => {
+                const m = map[k];
+                m.profit = m.sales - m.cost - m.fee;      // 销售利润
+                m.gross = m.profit - m.ship - m.other;    // 预估毛利
+                return m;
+            });
+        }
+
+        function renderMonthReport() {
+            const box = document.getElementById('monthReportBox');
+            const cmp = document.getElementById('monthCmpBox');
+            if (!box) return;
+            const rows = buildMonthRows();
+            if (!rows.length) {
+                box.innerHTML = emptyHtml('还没有数据');
+                if (cmp) cmp.innerHTML = '';
+                return;
+            }
+            const curKey = monthKeyOf(new Date());
+            const maxAbs = Math.max.apply(null, rows.map(m => Math.abs(m.gross)).concat([1]));
+            const body = rows.map(m => {
+                const w = Math.max(2, Math.round(Math.abs(m.gross) / maxAbs * 100));
+                const bar = '<div class="mbar"><i class="' + (m.gross < 0 ? 'neg' : '') + '" style="width:' + w + '%;"></i></div>';
+                return '<tr' + (m.key === curKey ? ' class="cur-month"' : '') + '>' +
+                    '<td>' + m.key + (m.key === curKey ? ' <span style="color:#bbb; font-size:0.7rem;">本月</span>' : '') + '</td>' +
+                    '<td>' + fmtQty(m.qty) + ' 件</td>' +
+                    '<td>¥' + m.sales.toFixed(2) + '</td>' +
+                    '<td style="color:' + (m.profit < 0 ? 'var(--danger)' : '#333') + ';">¥' + m.profit.toFixed(2) + '</td>' +
+                    '<td>¥' + m.ship.toFixed(2) + '</td>' +
+                    '<td>¥' + m.other.toFixed(2) + '</td>' +
+                    '<td style="font-weight:600; color:' + (m.gross < 0 ? 'var(--danger)' : 'var(--primary-color)') + ';">¥' + m.gross.toFixed(2) + bar + '</td>' +
+                    '<td>' + (m.retCnt ? (m.retCnt + ' 笔 ¥' + m.retAmt.toFixed(2)) : '—') + '</td>' +
+                    '</tr>';
+            }).join('');
+            box.innerHTML = '<div style="overflow-x:auto;"><table class="report-table"><thead><tr>' +
+                '<th>月份</th><th>出单(件)</th><th>销售额</th><th>销售利润</th><th>运费</th><th>其他支出</th><th>预估毛利</th><th>退货</th>' +
+                '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+                '<div class="trend-summary">口径与「经营概览」一致：销售利润 = 销售额 − 货成本 − 手续费（退货已冲减）；预估毛利 = 销售利润 − 运费 − 其他支出。灰色条越长 = 这个月赚得越多。</div>';
+
+            if (cmp) {
+                if (rows.length >= 2) {
+                    const cur = rows[0], prev = rows[1];
+                    const d = cur.gross - prev.gross;
+                    const cls = d >= 0 ? 'delta-up' : 'delta-down';
+                    const arrow = d >= 0 ? '↑' : '↓';
+                    const word = d > 0 ? '多赚' : (d < 0 ? '少赚' : '持平');
+                    cmp.innerHTML = '<div class="month-cmp">最近一个月（' + cur.key + '）预估毛利 <b>¥' + cur.gross.toFixed(2) + '</b>，'
+                        + '比上一个月（' + prev.key + '）<span class="' + cls + '">' + arrow + ' ¥' + Math.abs(d).toFixed(2) + '（' + word + '）</span></div>';
+                } else {
+                    cmp.innerHTML = '<div class="month-cmp">目前只有 <b>' + rows[0].key + '</b> 一个月的数据，攒到第二个月就能看环比了。</div>';
+                }
+            }
+        }
+
+        function exportMonthCSV() {
+            const rows = [['月份', '出单记录数', '销量(件)', '销售额(元)', '销售利润(元)', '运费(元)', '其他支出(元)', '预估毛利(元)', '退货笔数', '退款金额(元)']];
+            buildMonthRows().forEach(m => {
+                rows.push([m.key, m.orders, m.qty, m.sales.toFixed(2), m.profit.toFixed(2), m.ship.toFixed(2), m.other.toFixed(2), m.gross.toFixed(2), m.retCnt, m.retAmt.toFixed(2)]);
+            });
+            if (rows.length < 2) { showToast('还没有数据可以导出'); return; }
+            downloadFile('\uFEFF' + rows.map(r => r.map(csvEsc).join(',')).join('\r\n'), `经营月报_${todayStr()}.csv`, 'text/csv');
+            showToast('月报CSV已导出');
         }
 
         function quickGo(tabId) {
@@ -4248,9 +4451,9 @@ function findByTracking(rawInput, allowFuzzy) {
 
             // 核心指标卡
             const cards = [
-                { l: '出单笔数', v: orders },
-                { l: '销量(件)', v: soldQty % 1 === 0 ? soldQty : soldQty.toFixed(1) },
-                { l: '客单价', v: orders > 0 ? '¥' + (netSales / orders).toFixed(1) : '¥0' },
+                { l: '出单数量(件)', v: fmtQty(soldQty) },
+                { l: '出单记录', v: (orders || 0) + ' 条' },
+                { l: '客单价', v: soldQty > 0 ? '¥' + (netSales / soldQty).toFixed(1) : '¥0' },
                 { l: '退款率', v: refundRate.toFixed(1) + '%' }
             ];
             document.getElementById('miniStats').innerHTML = cards.map(c =>
@@ -4297,6 +4500,9 @@ function findByTracking(rawInput, allowFuzzy) {
 
             // 库存构成
             renderStockMix();
+
+            // 每月利润对比（看全量历史，不受上面「统计时段」影响）
+            renderMonthReport();
         }
 
         function renderInsights(recs, agg) {
