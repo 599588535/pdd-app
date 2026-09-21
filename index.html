@@ -519,6 +519,15 @@
                     <button type="button" class="btn btn-outline btn-sm" id="btnClearStocked" style="display:none;" onclick="clearStockedHistory()">🗑️ 清空入库历史</button>
                 </div>
 
+                <div class="hist-bar" id="stockedQueryBar" style="display:none;" data-page-node-id="stockQBar1">
+                    <select id="purAccountFilter" onchange="renderPurchases()" data-page-node-id="stockQAcct" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #eee; font-size: 0.8rem; background: #fff; color: #555; max-width: 45%;">
+                        <option value="">全部下单账号</option>
+                    </select>
+                    <input type="text" id="purKeyFilter" placeholder="商品名 / 快递单号 / 订单号" autocomplete="off" oninput="renderPurchases()" data-page-node-id="stockQKey">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="resetStockedQuery()" data-page-node-id="stockQReset">↺ 重置</button>
+                    <span class="hist-sep" id="purQueryInfo" data-page-node-id="stockQInfo"></span>
+                </div>
+
                 <div id="purchaseList" class="record-list" style="margin-top: 15px;" data-page-node-id="JNlw92FTBkLuGz2gmIUqiR"></div>
             </div>
 
@@ -1042,7 +1051,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-20 09:31';
+        const APP_BUILD = '2026-09-21 17:26';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -2507,6 +2516,36 @@
             showToast('已清空 ' + stocked.length + ' 条入库历史');
         }
 
+        // 「已入库」查询条：把已入库记录里出现过的「下单账号」收集成下拉选项。
+        // 只在选项内容真的变了才重建，避免用户输入关键词时把已选账号顶掉。
+        function syncPurAccountFilter(stockedList) {
+            const sel = document.getElementById('purAccountFilter');
+            if (!sel) return;
+            const cur = sel.value;
+            const accts = [];
+            (stockedList || []).forEach(p => {
+                const a = String(p.account || '').trim();
+                if (a && accts.indexOf(a) < 0) accts.push(a);
+            });
+            accts.sort();
+            const sig = accts.join('\u0001');
+            if (sel.getAttribute('data-sig') === sig) return;
+            sel.innerHTML = '<option value="">全部下单账号</option>' +
+                accts.map(a => '<option value="' + esc(a) + '">👤 ' + esc(a) + '</option>').join('');
+            sel.setAttribute('data-sig', sig);
+            sel.value = accts.indexOf(cur) >= 0 ? cur : '';
+        }
+
+        // 重置「已入库」的查询条件
+        function resetStockedQuery() {
+            const aEl = document.getElementById('purAccountFilter');
+            const kEl = document.getElementById('purKeyFilter');
+            if (aEl) aEl.value = '';
+            if (kEl) kEl.value = '';
+            renderPurchases();
+            showToast('已重置查询条件');
+        }
+
         function renderPurchases() {
             const box = document.getElementById('purchaseList');
             if (!box) return;
@@ -2524,15 +2563,38 @@
 
             const fEl = document.getElementById('purFilter');
             const f = fEl ? fEl.value : 'all';
+            const stocking = f === 'stocked';
+            const stockedAll = all.filter(p => p.stocked);
             let list;
-            if (f === 'stocked') list = all.filter(p => p.stocked);
+            if (stocking) list = stockedAll.slice();
             else if (f === 'todo') list = active.filter(p => !p.arrived);
             else if (f === 'done') list = active.filter(p => p.arrived);
             else list = active;
 
+            // 已入库历史：显示查询条，并按「下单账号 / 关键词」二次筛选
+            const qBar = document.getElementById('stockedQueryBar');
+            if (qBar) qBar.style.display = stocking ? 'flex' : 'none';
+            let qFiltered = false;
+            if (stocking) {
+                syncPurAccountFilter(stockedAll);
+                const aEl = document.getElementById('purAccountFilter');
+                const kEl = document.getElementById('purKeyFilter');
+                const acc = aEl ? aEl.value : '';
+                const kw = (kEl ? String(kEl.value).trim().toLowerCase() : '');
+                const total = list.length;
+                if (acc) list = list.filter(p => String(p.account || '').trim() === acc);
+                if (kw) list = list.filter(p => [
+                    p.name, p.trackingNo, p.orderNo, p.courier, p.account, p.note
+                ].map(v => String(v || '')).join(' ').toLowerCase().indexOf(kw) >= 0);
+                qFiltered = !!(acc || kw);
+                const info = document.getElementById('purQueryInfo');
+                if (info) info.innerText = qFiltered ? ('筛选 ' + list.length + ' / ' + total + ' 条') : ('共 ' + total + ' 条');
+            }
+
             if (!list.length) {
-                const empty = f === 'stocked' ? '还没有已入库的记录'
+                let empty = stocking ? '还没有已入库的记录'
                     : (all.length && !active.length ? '全部都已入库，切到「已入库」可查看历史' : '暂无待收货商品');
+                if (stocking && qFiltered && stockedAll.length) empty = '没有符合条件的记录，换个账号或关键词试试（点「↺ 重置」可还原）';
                 box.innerHTML = '<div style="text-align: center; color: #999; padding: 12px 0;">' + empty + '</div>';
                 return;
             }
@@ -3708,6 +3770,19 @@ function findByTracking(rawInput, allowFuzzy) {
             });
         }
 
+        // 下拉默认排序：库存多的排在最前面（库存相同再按名称）。
+        // 入库、出单、退货、采购、拒收五个下拉统一走这里，规则一致。
+        function sortKeysByStock(keys) {
+            return (keys || []).slice().sort((a, b) => {
+                const pa = appData.products[a] || {};
+                const pb = appData.products[b] || {};
+                const sa = Number(pa.stock) || 0;
+                const sb = Number(pb.stock) || 0;
+                if (sb !== sa) return sb - sa;
+                return String(pa.name || a).localeCompare(String(pb.name || b));
+            });
+        }
+
         function suggestEmptyHTML(type) {
             if (type === 'out') return '<div class="suggestion-empty">库存总览里没有可出单的商品（0 库存不能出单）</div>';
             if (type === 'in') return '<div class="suggestion-empty">库存总览里还没有这个商品，直接输入名称即可（会自动新建）</div>';
@@ -3720,7 +3795,7 @@ function findByTracking(rawInput, allowFuzzy) {
             const box = document.getElementById(boxId);
             if (!input || !box) return;
 
-            let keys = stockListKeys().sort();
+            let keys = sortKeysByStock(stockListKeys());
             // 出单只能选有库存的商品
             if (type === 'out') keys = keys.filter(k => appData.products[k].stock > 0.0001);
             if (keys.length === 0) {
@@ -3758,7 +3833,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 const box = document.getElementById(boxId);
                 if (!box) return;
                 if (!val) { showSuggestions(type); return; }
-                let matches = stockListKeys().filter(k => k.includes(val));
+                let matches = sortKeysByStock(stockListKeys().filter(k => k.includes(val)));
                 if (type === 'out') matches = matches.filter(k => appData.products[k].stock > 0.0001);
                 box.innerHTML = '';
                 if (matches.length > 0) {
