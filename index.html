@@ -1082,7 +1082,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-21 21:34';
+        const APP_BUILD = '2026-09-24 18:41';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1203,6 +1203,14 @@
             initialSync();
             window.addEventListener('online', () => initialSync());
             window.addEventListener('pagehide', flushSyncOnExit);
+
+            // 定时瞄一眼云端：另一台设备改了数据，这边最多 90 秒就能看到（页面在前台时）
+            cloudPollTimer = setInterval(() => pollCloudOnce(false), CLOUD_POLL_MS);
+            // 从后台切回前台的那一下立刻查：拿起手机就能看到电脑端刚改的内容，不用等下一轮
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') setTimeout(() => pollCloudOnce(true), 400);
+                else flushSyncOnExit();   // 切后台/锁屏也当作「可能要走了」，有未推送的改动就抢发一次
+            });
         });
 
         function saveData() {
@@ -1273,11 +1281,20 @@
         }
 
         /* ==================== 云端自动同步 ==================== */
-        const AUTO_SYNC_DELAY = 3000;
+        // 改完多久推上去。原来是 3 秒，改完立刻关机就会丢；压到 0.6 秒，窗口基本消失
+        const AUTO_SYNC_DELAY = 600;
         let autoSyncTimer = null;
         let lastCloudUpdatedAt = null;  // 最近一次已知云端版本
-        let cachedSha = null;           // 云端文件 sha（'' 表示云端暂无文件）
+        // 云端文件 sha（'' 表示云端暂无文件）。初值从本地缓存取：
+        // 「原始文件」通道和直链通道都拿不到 sha，导致退出时的抢发被跳过、数据留在本机。
+        let cachedSha = null;
+        try { const s = localStorage.getItem('pddLastSha'); if (s) cachedSha = s; } catch (e) {}
         let syncBusy = false;
+
+        // 另一台设备改了数据后，这边多久去云端瞄一眼（只读一个几百字节的文件指纹，不变就不下载）
+        const CLOUD_POLL_MS = 90000;
+        let cloudPollTimer = null;
+        let lastCloudSha = null;        // 最近一次确认与云端一致的文件指纹
 
         function fmtTs(ts) {
             if (!ts) return '未知';
@@ -1582,6 +1599,19 @@
                 }, 30000);
                 if (putRes.status === 200 || putRes.status === 201) {
                     lastCloudUpdatedAt = appData.updatedAt;
+                    // 记下这次推送后的云端文件指纹：
+                    // ① 退出页面时的抢发要用它（首选通道拿不到 sha，只能靠这里缓存）
+                    // ② 记进 lastCloudSha，自己推完就不会再把自己拉回来一遍
+                    try {
+                        const putData = await putRes.json();
+                        const newSha = putData && putData.content && putData.content.sha;
+                        if (newSha) {
+                            cachedSha = newSha;
+                            lastCloudSha = newSha;
+                            localStorage.setItem('pddLastSha', newSha);
+                        }
+                    } catch (e) {}
+                    try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
                     setSyncStatus('✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
                     if (!silent) showToast('数据已推送到云端');
                     return true;
@@ -1683,6 +1713,7 @@
             appData.isSeed = false;
             saveData();
             lastCloudUpdatedAt = appData.updatedAt; // saveData 已重新盖章，视为已同步，不再回推
+            try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
         }
 
         async function initialSync() {
@@ -1710,6 +1741,11 @@
                 setSyncStatus('⚠️ 云端检查失败（离线或配置有误）');
             }
             syncBusy = false;
+            // 把当前云端指纹记成基准，免得定时探测第一次又白拉一遍全量。
+            // 首次检查就失败（离线）时不记，留给定时探测去补救。
+            if (lastCloudSha === null) {
+                try { const baseSha = await probeCloudSha(); if (baseSha) lastCloudSha = baseSha; } catch (e) {}
+            }
         }
 
         async function pullFromGithub() {
@@ -1848,9 +1884,72 @@
             old();
         }
 
+        /* 轻量探测：只读云端文件的指纹（sha），不下载文件本体。
+           为什么不直接定时拉全量 —— 数据带商品图片后常有 1MB+，手机上每分钟拉一遍太费流量；
+           而这个请求只回几百字节（GitHub 对 >1MB 的文件也只回元数据，sha 照样在里面）。 */
+        async function probeCloudSha() {
+            if (!syncConfigured()) return null;
+            try {
+                const res = await fetchWithTimeout(githubDataUrl(), {
+                    headers: { Authorization: 'token ' + ghConfig.token },
+                    cache: 'no-store'
+                }, 12000);
+                if (res.status === 404) return '';      // 云端还没有这个文件
+                if (!res.ok) return null;
+                const j = await readJsonSafe(res, '探测云端文件');
+                return (j && j.sha) ? j.sha : null;
+            } catch (e) { return null; }                // 探测失败（离线/权限问题）→ 下一轮再说
+        }
+
+        function anyModalOpen() {
+            const ids = ['editModal', 'scanModal'];
+            for (let i = 0; i < ids.length; i++) {
+                const el = document.getElementById(ids[i]);
+                if (el && el.style.display && el.style.display !== 'none') return true;
+            }
+            return false;
+        }
+
+        /* 定时瞄一眼云端：文件指纹变了才下载全量。
+           手机端以前只在「打开页面」和「网络恢复」时查云端，页面一直开着、
+           或从后台切回来都不会查，所以永远看不到另一台设备的改动。 */
+        async function pollCloudOnce(force) {
+            if (!syncConfigured() || appData.isSeed || syncBusy) return;
+            if (document.visibilityState !== 'visible') return;
+            if (anyModalOpen()) return;                 // 正在弹窗填写时不打扰
+            const sha = await probeCloudSha();
+            if (sha === null) return;                   // 探测失败，下一轮再试
+            if (sha === lastCloudSha && !force) return; // 云端没变，省掉整次下载
+            lastCloudSha = sha;
+            if (sha === '') return;                     // 云端暂无文件
+            syncBusy = true;
+            try {
+                const cloud = await fetchCloud();
+                if (cloud.notFound) return;
+                // 只在云端确实更新时才接收：本机更新或两边相等都不动，
+                // 免得把这边刚录好的单子冲掉（那种情况由 initialSync 去补推）
+                if ((cloud.updatedAt || 0) > (appData.updatedAt || 0)) {
+                    adoptCloud(cloud);
+                    renderAllLists();
+                    renderTodayCard();
+                    showToast('已同步另一台设备的最新数据 ' + fmtTs(cloud.updatedAt));
+                }
+            } catch (e) {
+                // 静默失败：不打断操作，下一轮自会重试
+            } finally { syncBusy = false; }
+        }
+
         function flushSyncOnExit() {
             if (!syncConfigured() || appData.isSeed || syncBusy) return;
-            if (lastCloudUpdatedAt === null || appData.updatedAt === lastCloudUpdatedAt || cachedSha === null) return;
+            // 没有云端文件指纹就先不发：PUT 更新已存在的文件必须带 sha，硬发只会 409 白费
+            if (cachedSha === null) return;
+            // 本机没有新改动就不必发。原来这里用的是内存变量 lastCloudUpdatedAt，
+            // 页面一刷新就是 null，于是「改了但没同步完」的兜底等于是关着的；
+            // 改成读本地留痕 pddLastSyncAt，跨会话也认得出来。
+            let syncedAt = null;
+            try { syncedAt = localStorage.getItem('pddLastSyncAt'); } catch (e) {}
+            if (syncedAt !== null && String(appData.updatedAt) === String(syncedAt)) return;
+            if (lastCloudUpdatedAt !== null && appData.updatedAt === lastCloudUpdatedAt) return;
             try {
                 const body = { message: 'auto sync on exit', content: utf8ToBase64(JSON.stringify(appData)) };
                 if (cachedSha) body.sha = cachedSha;
