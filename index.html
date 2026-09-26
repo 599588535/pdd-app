@@ -1082,7 +1082,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-24 18:41';
+        const APP_BUILD = '2026-09-26 17:53';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1213,8 +1213,11 @@
             });
         });
 
-        function saveData() {
-            appData.updatedAt = Date.now();
+        // keepStamp = true：保留 appData 里已有的 updatedAt，不重新盖章。
+        // 从云端接收数据时必须用它 —— 否则会把云端那份的时间戳改成"现在"，
+        // 导致两边永远对不上、互相来回推。
+        function saveData(keepStamp) {
+            if (!keepStamp) appData.updatedAt = Date.now();
             if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
             // 0 库存商品：库存变 0 时开始计时，连续 7 天没库存就自动清理（历史流水保留）
             try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
@@ -1225,6 +1228,21 @@
             const statsPage = document.getElementById('page-stats');
             if (statsPage && statsPage.classList.contains('active')) renderStats();
             scheduleAutoSync();
+        }
+
+        /* 本机有没有「改过但还没推上去」的数据。
+           ⚠️ 判断依据是本地留痕 pddLastSyncAt（每次同步成功时写入 = 当时的 appData.updatedAt），
+           绝不比较两台设备的本地时钟 —— 手机和电脑的时钟只要有偏差，
+           「谁的时间戳大谁就是新数据」就会判错，手机刚录的单会被电脑的旧数据覆盖。
+           这正是「改完手机版，一会电脑版旧数据自己同步过来」的根因。 */
+        function hasLocalChanges() {
+            if (appData.isSeed) return false;          // 示例数据不算改动
+            let synced = null;
+            try { synced = localStorage.getItem('pddLastSyncAt'); } catch (e) {}
+            if (synced !== null) return String(appData.updatedAt) !== String(synced);
+            // 从没成功同步过：本机已经有真实业务数据，就当作有未推送的改动
+            return (appData.records && appData.records.length > 0) ||
+                   (appData.purchases && appData.purchases.length > 0);
         }
 
         function loadData() {
@@ -1562,8 +1580,18 @@
             autoSyncTimer = setTimeout(autoPush, AUTO_SYNC_DELAY);
         }
 
-        async function autoPush() {
-            if (!syncConfigured() || appData.isSeed || syncBusy) return;
+        async function autoPush(retry) {
+            if (!syncConfigured() || appData.isSeed) return;
+            if (syncBusy) {
+                // 正在做别的同步（例如正在拉云端）→ 稍后重试。
+                // 旧逻辑在这里直接 return，这次改动就永远不推了 ——
+                // 手机上就是这个原因导致改动上不去云端、电脑端一直看到旧数据。
+                if ((retry || 0) < 20) {
+                    clearTimeout(autoSyncTimer);
+                    autoSyncTimer = setTimeout(() => autoPush((retry || 0) + 1), 1500);
+                }
+                return;
+            }
             if (lastCloudUpdatedAt !== null && appData.updatedAt === lastCloudUpdatedAt) return;
             syncBusy = true;
             setSyncStatus('🔄 自动同步中...');
@@ -1711,8 +1739,8 @@
             if (!appData.records) appData.records = [];
             if (!appData.purchases) appData.purchases = [];
             appData.isSeed = false;
-            saveData();
-            lastCloudUpdatedAt = appData.updatedAt; // saveData 已重新盖章，视为已同步，不再回推
+            saveData(true);   // 保留云端那份 updatedAt，本机才能认出「这份就是云端那份」
+            lastCloudUpdatedAt = appData.updatedAt; // 已与云端一致，不再回推
             try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
         }
 
@@ -1726,13 +1754,21 @@
                 if (cloud.notFound) {
                     if (!appData.isSeed) await uploadData(true);
                     else setSyncStatus('云端暂无数据，本机有修改后将自动上传');
-                } else if (appData.isSeed || (cloud.updatedAt || 0) > (appData.updatedAt || 0)) {
+                } else if (appData.isSeed) {
                     adoptCloud(cloud);
                     renderAllLists();
                     showToast('已自动同步云端最新数据');
-                } else if ((cloud.updatedAt || 0) < (appData.updatedAt || 0)) {
-                    setSyncStatus('本机数据较新，正在上传...');
-                    await uploadData(true);
+                } else if (hasLocalChanges()) {
+                    // 本机有「改过还没推上去」的数据 → 先把它传上去，绝不拿云端覆盖它。
+                    // 旧逻辑在这里比的是两台设备的本地时钟，手机时钟一慢就会误判、
+                    // 把手机刚录的单当成"旧数据"丢掉。
+                    setSyncStatus('本机有未同步的改动，正在上传...');
+                    const pushed = await uploadData(true);
+                    if (!pushed) setSyncStatus('⚠️ 本机改动还没传上去（网络问题），本机数据已保留');
+                } else if (String(cloud.updatedAt) !== String(appData.updatedAt)) {
+                    adoptCloud(cloud);
+                    renderAllLists();
+                    showToast('已自动同步云端最新数据');
                 } else {
                     lastCloudUpdatedAt = appData.updatedAt;
                     setSyncStatus('✅ 已与云端同步');
@@ -1917,39 +1953,49 @@
             if (!syncConfigured() || appData.isSeed || syncBusy) return;
             if (document.visibilityState !== 'visible') return;
             if (anyModalOpen()) return;                 // 正在弹窗填写时不打扰
+
+            // ① 本机有「改过还没推上去」的数据 → 先把它送上去，绝不拉云端覆盖它。
+            //    这个轮询同时兼作「推送失败自动重试」，保证手机上的改动最终一定能到电脑端。
+            if (hasLocalChanges()) {
+                syncBusy = true;
+                try {
+                    const pushed = await uploadData(true);
+                    if (pushed) showToast('本机改动已同步到云端');
+                    else setSyncStatus('⚠️ 本机改动还没传上去（将自动重试）');
+                } finally { syncBusy = false; }
+                return;
+            }
+
+            // ② 本机是干净的：只在云端真有变化时才下载
             const sha = await probeCloudSha();
             if (sha === null) return;                   // 探测失败，下一轮再试
             if (sha === lastCloudSha && !force) return; // 云端没变，省掉整次下载
-            lastCloudSha = sha;
             if (sha === '') return;                     // 云端暂无文件
             syncBusy = true;
+            let cloud = null;
             try {
-                const cloud = await fetchCloud();
-                if (cloud.notFound) return;
-                // 只在云端确实更新时才接收：本机更新或两边相等都不动，
-                // 免得把这边刚录好的单子冲掉（那种情况由 initialSync 去补推）
-                if ((cloud.updatedAt || 0) > (appData.updatedAt || 0)) {
-                    adoptCloud(cloud);
-                    renderAllLists();
-                    renderTodayCard();
-                    showToast('已同步另一台设备的最新数据 ' + fmtTs(cloud.updatedAt));
-                }
+                cloud = await fetchCloud();
             } catch (e) {
-                // 静默失败：不打断操作，下一轮自会重试
+                return;                                 // 拉失败：指纹不更新，下一轮还能再来
             } finally { syncBusy = false; }
+            if (!cloud || cloud.notFound) return;
+            lastCloudSha = sha;                         // 真正拿到数据了才认这个指纹
+            // 本机已经干净（没有待推送的改动），云端又变了，就直接接收。
+            // 这里不再比较两台设备的时钟 —— 手机和电脑时间不一致也不会判错。
+            if (String(cloud.updatedAt) !== String(appData.updatedAt)) {
+                adoptCloud(cloud);
+                renderAllLists();
+                showToast('已同步另一台设备的最新数据');
+            }
         }
 
         function flushSyncOnExit() {
             if (!syncConfigured() || appData.isSeed || syncBusy) return;
             // 没有云端文件指纹就先不发：PUT 更新已存在的文件必须带 sha，硬发只会 409 白费
             if (cachedSha === null) return;
-            // 本机没有新改动就不必发。原来这里用的是内存变量 lastCloudUpdatedAt，
-            // 页面一刷新就是 null，于是「改了但没同步完」的兜底等于是关着的；
-            // 改成读本地留痕 pddLastSyncAt，跨会话也认得出来。
-            let syncedAt = null;
-            try { syncedAt = localStorage.getItem('pddLastSyncAt'); } catch (e) {}
-            if (syncedAt !== null && String(appData.updatedAt) === String(syncedAt)) return;
-            if (lastCloudUpdatedAt !== null && appData.updatedAt === lastCloudUpdatedAt) return;
+            // 本机没有新改动就不必发。判断走 hasLocalChanges()（读本地留痕，跨会话有效），
+            // 不用内存变量 lastCloudUpdatedAt —— 页面一刷新它就是 null，兜底等于关着。
+            if (!hasLocalChanges()) return;
             try {
                 const body = { message: 'auto sync on exit', content: utf8ToBase64(JSON.stringify(appData)) };
                 if (cachedSha) body.sha = cachedSha;
