@@ -42,6 +42,10 @@
         .update-bar { position: fixed; left: 12px; right: 12px; bottom: 86px; z-index: 250; background: #fff8e6; border: 1px solid #ffcc80; color: #8a5300; border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; box-shadow: 0 4px 14px rgba(0,0,0,0.14); display: flex; align-items: center; gap: 8px; line-height: 1.5; }
         .update-bar .ub-btn { background: var(--primary-color); color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; font-size: 0.8rem; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
         .update-bar .ub-x { color: #c0a071; cursor: pointer; font-size: 1rem; padding: 0 2px; flex-shrink: 0; }
+        /* 云端同步失败时的提示条（结构同 update-bar，改成警示色；位置抬高一点避开新版本提示条） */
+        .sync-warn-bar { position: fixed; left: 12px; right: 12px; bottom: 150px; z-index: 260; background: #fdecea; border: 1px solid #ef9a9a; color: #a12622; border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; box-shadow: 0 4px 14px rgba(0,0,0,0.14); display: flex; align-items: center; gap: 8px; line-height: 1.5; }
+        .sync-warn-bar .ub-btn { background: var(--danger); color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; font-size: 0.8rem; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+        .sync-warn-bar .ub-x { color: #c98b88; cursor: pointer; font-size: 1rem; padding: 0 2px; flex-shrink: 0; }
         
         .date-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
         .date-select-group { display: flex; align-items: center; background: rgba(255,255,255,0.2); border-radius: 20px; padding: 2px 8px; }
@@ -357,6 +361,8 @@
     <div id="toast" class="toast" data-page-node-id="iYZiAKZaJdLSRKVTUFozvJ">操作成功</div>
 
     <div id="updateBar" class="update-bar" style="display: none;" data-page-node-id="updBar01"></div>
+
+    <div id="syncWarnBar" class="sync-warn-bar" style="display: none;" data-page-node-id="syncWarnBar01"></div>
 
     <div class="dashboard" id="dashboard" data-page-node-id="NbTlhkI0zbAQ06SfZ5L25e">
         <div class="top-bar" data-page-node-id="99AaaCSdBeajv0JlEVpOGr">
@@ -1082,7 +1088,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-26 17:53';
+        const APP_BUILD = '2026-09-27 21:36';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1221,12 +1227,26 @@
             if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
             // 0 库存商品：库存变 0 时开始计时，连续 7 天没库存就自动清理（历史流水保留）
             try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
-            localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
-            updateDashboard();
-            renderTodayCard();
-            renderStockList();
-            const statsPage = document.getElementById('page-stats');
-            if (statsPage && statsPage.classList.contains('active')) renderStats();
+
+            // ⚠️ 写本地必须单独兜住异常：数据带上商品图片（base64）后可能撑到浏览器给本页面的
+            // 存储上限，setItem 抛 QuotaExceededError 时，旧代码会让这一行之后的
+            // updateDashboard / scheduleAutoSync 全部不执行 —— 现象就是「改了数据界面不动、
+            // 云端也永远不更新」。这里出错只提示，绝不阻断后面的渲染与自动同步。
+            try {
+                localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
+            } catch (e) {
+                console.warn('本地保存失败', e);
+                showSyncWarn('⚠️ 本机存储写不进去了（多为商品图片太多、占满浏览器配额）。这次的改动在本页面内有效，但刷新后会丢、也不会传到云端 → 建议先点「备份JSON」存一份，再删掉一些商品图片。');
+            }
+
+            try { updateDashboard(); } catch (e) { console.warn(e); }
+            try { renderTodayCard(); } catch (e) { console.warn(e); }
+            try { renderStockList(); } catch (e) { console.warn(e); }
+            try {
+                const statsPage = document.getElementById('page-stats');
+                if (statsPage && statsPage.classList.contains('active')) renderStats();
+            } catch (e) { console.warn(e); }
+            // 自动推送的排期放最后、且不受上面任何异常影响：只要改过数据就必须有机会推上去
             scheduleAutoSync();
         }
 
@@ -1241,8 +1261,10 @@
             try { synced = localStorage.getItem('pddLastSyncAt'); } catch (e) {}
             if (synced !== null) return String(appData.updatedAt) !== String(synced);
             // 从没成功同步过：本机已经有真实业务数据，就当作有未推送的改动
+            // （也要看商品：只建过商品、还没有任何流水时，也不能当成「没改动」而不推）
             return (appData.records && appData.records.length > 0) ||
-                   (appData.purchases && appData.purchases.length > 0);
+                   (appData.purchases && appData.purchases.length > 0) ||
+                   (appData.products && Object.keys(appData.products).length > 0);
         }
 
         function loadData() {
@@ -1308,6 +1330,15 @@
         let cachedSha = null;
         try { const s = localStorage.getItem('pddLastSha'); if (s) cachedSha = s; } catch (e) {}
         let syncBusy = false;
+
+        /* 推送失败后的自动重试（退避：8s → 20s → 45s → 90s → 180s）。
+           旧代码推送失败只在管理页留一行小字、且不再排期 —— 一旦失败（网络抖动、上传超时、
+           Token 失效），那次改动就卡在本机，用户看到的现象正是「改了数据云端一直不更新」。
+           现在失败会自动退避重试，并给用户看得见的提示。 */
+        const PUSH_RETRY_STEPS = [8000, 20000, 45000, 90000, 180000];
+        let pushRetryCount = 0;
+        let pushRetryTimer = null;
+        let lastSyncError = '';         // 最近一次推送失败的原因，显示在提示条上
 
         // 另一台设备改了数据后，这边多久去云端瞄一眼（只读一个几百字节的文件指纹，不变就不下载）
         const CLOUD_POLL_MS = 90000;
@@ -1574,6 +1605,50 @@
             copyTextFallback(stamp);
         }
 
+        /* 同步失败提示条：失败原因必须让用户看得见。
+           以前推送失败只在管理页留一行小字，首页毫无感知，用户只能靠猜「为什么云端没更新」。 */
+        function showSyncWarn(msg) {
+            const el = document.getElementById('syncWarnBar');
+            if (!el) return;
+            el.innerHTML = '<span>' + esc(msg) + '</span>' +
+                '<button type="button" class="ub-btn" onclick="retryPushNow()">立即重试</button>' +
+                '<span class="ub-x" onclick="hideSyncWarn()">✕</span>';
+            el.style.display = 'flex';
+        }
+        function hideSyncWarn() {
+            const el = document.getElementById('syncWarnBar');
+            if (el) el.style.display = 'none';
+        }
+        function retryPushNow() {
+            pushRetryCount = 0;
+            clearTimeout(pushRetryTimer); pushRetryTimer = null;
+            autoPush();
+        }
+        // 自动同步成功后给一次轻提示（20 秒内最多一次，免得连续录单时一直弹）
+        let lastPushToastAt = 0;
+        function toastPushOk() {
+            const now = Date.now();
+            if (now - lastPushToastAt < 20000) return;
+            lastPushToastAt = now;
+            showToast('✅ 已自动同步到云端');
+        }
+        // 推送失败 → 按退避节奏自己重试，直到成功或试完为止（提示条会一直告诉用户还在重试）
+        function schedulePushRetry() {
+            if (!syncConfigured() || !hasLocalChanges()) return;
+            const why = lastSyncError ? '（' + lastSyncError + '）' : '';
+            if (pushRetryCount >= PUSH_RETRY_STEPS.length) {
+                showSyncWarn('⚠️ 自动同步连续失败' + why + '，你的改动还在本机、没有丢。可点「立即重试」，' +
+                    '或到「管理 → GitHub 云端同步」检查配置（点「🔌 云端连通测试」能看出是哪一环不通）。');
+                return;
+            }
+            const delay = PUSH_RETRY_STEPS[pushRetryCount++];
+            clearTimeout(pushRetryTimer);
+            pushRetryTimer = setTimeout(() => { pushRetryTimer = null; autoPush(); }, delay);
+            const secs = Math.round(delay / 1000);
+            setSyncStatus('⚠️ 同步失败' + why + '，' + secs + ' 秒后自动重试...');
+            showSyncWarn('⚠️ 数据还没传到云端' + why + '，' + secs + ' 秒后自动重试（改动在本机，不会丢）。');
+        }
+
         function scheduleAutoSync() {
             if (!syncConfigured() || appData.isSeed) return;
             clearTimeout(autoSyncTimer);
@@ -1589,15 +1664,28 @@
                 if ((retry || 0) < 20) {
                     clearTimeout(autoSyncTimer);
                     autoSyncTimer = setTimeout(() => autoPush((retry || 0) + 1), 1500);
+                } else {
+                    // 别的同步任务占得太久（例如正在拉 1MB+ 的云端数据）→ 交给退避重试，别把这次改动丢掉
+                    schedulePushRetry();
                 }
                 return;
             }
-            if (lastCloudUpdatedAt !== null && appData.updatedAt === lastCloudUpdatedAt) return;
+            // 判据用「本机有没有还没推上去的改动」，不用内存里的 lastCloudUpdatedAt ——
+            // 后者刷新页面就归零，两个判据不一致时容易误跳过这次推送。
+            if (!hasLocalChanges()) return;
             syncBusy = true;
             setSyncStatus('🔄 自动同步中...');
             const ok = await uploadData(true);
             syncBusy = false;
-            if (!ok) setSyncStatus('⚠️ 自动同步失败（将随下次修改重试）');
+            if (ok) {
+                pushRetryCount = 0;
+                clearTimeout(pushRetryTimer); pushRetryTimer = null;
+                lastSyncError = '';
+                hideSyncWarn();
+                toastPushOk();
+            } else {
+                schedulePushRetry();   // 失败必须自己重试，不能等「下次修改」—— 用户可能就此不再改数据
+            }
         }
 
         async function uploadData(silent) {
@@ -1614,19 +1702,26 @@
                 }
                 cachedSha = sha;
             } catch (e) {
+                lastSyncError = '读取云端文件信息失败：' + (e.message || e);
                 if (!silent) alert('网络错误: ' + e.message);
                 return false;
             }
+            let sizeKb = 0;
             try {
-                const body = { message: '数据同步 ' + new Date().toLocaleString('zh-CN', { hour12: false }), content: utf8ToBase64(JSON.stringify(appData)) };
+                const payload = JSON.stringify(appData);
+                sizeKb = Math.round(payload.length / 1024);
+                // 手机上传 1MB+ 的数据本来就要几十秒，固定 30 秒会直接超时失败（数据带图片后很容易破 1MB）
+                const putTimeout = sizeKb > 800 ? 150000 : (sizeKb > 300 ? 75000 : 30000);
+                const body = { message: '数据同步 ' + new Date().toLocaleString('zh-CN', { hour12: false }), content: utf8ToBase64(payload) };
                 if (sha) body.sha = sha;
                 const putRes = await fetchWithTimeout(url, {
                     method: 'PUT',
                     headers: { Authorization: `token ${ghConfig.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
-                }, 30000);
+                }, putTimeout);
                 if (putRes.status === 200 || putRes.status === 201) {
                     lastCloudUpdatedAt = appData.updatedAt;
+                    lastSyncError = '';
                     // 记下这次推送后的云端文件指纹：
                     // ① 退出页面时的抢发要用它（首选通道拿不到 sha，只能靠这里缓存）
                     // ② 记进 lastCloudSha，自己推完就不会再把自己拉回来一遍
@@ -1645,6 +1740,7 @@
                     return true;
                 }
                 const errData = await putRes.json().catch(() => ({}));
+                lastSyncError = 'HTTP ' + putRes.status + (errData.message ? '：' + errData.message : '');
                 if (!silent) {
                     let hint = '';
                     if (putRes.status === 404) hint = '\n\n请检查：\n- Token 是否已授权该仓库\n- 用户名/仓库名是否拼写正确';
@@ -1653,6 +1749,9 @@
                 }
                 return false;
             } catch (error) {
+                lastSyncError = (error && error.name === 'AbortError')
+                    ? '上传超时（数据约 ' + sizeKb + ' KB，网络太慢）'
+                    : (error.message || String(error));
                 if (!silent) alert('推送失败:\n' + error.message);
                 return false;
             }
@@ -1752,7 +1851,8 @@
             try {
                 const cloud = await fetchCloud();
                 if (cloud.notFound) {
-                    if (!appData.isSeed) await uploadData(true);
+                    // 云端还没有数据文件：本机有真实数据就顺手建起来（示例数据不推）
+                    if (!appData.isSeed) { if (!(await uploadData(true))) schedulePushRetry(); }
                     else setSyncStatus('云端暂无数据，本机有修改后将自动上传');
                 } else if (appData.isSeed) {
                     adoptCloud(cloud);
@@ -1764,7 +1864,10 @@
                     // 把手机刚录的单当成"旧数据"丢掉。
                     setSyncStatus('本机有未同步的改动，正在上传...');
                     const pushed = await uploadData(true);
-                    if (!pushed) setSyncStatus('⚠️ 本机改动还没传上去（网络问题），本机数据已保留');
+                    if (!pushed) {
+                        setSyncStatus('⚠️ 本机改动还没传上去（网络问题），本机数据已保留');
+                        schedulePushRetry();   // 打开页面时的推送失败同样要自动重试
+                    }
                 } else if (String(cloud.updatedAt) !== String(appData.updatedAt)) {
                     adoptCloud(cloud);
                     renderAllLists();
@@ -1775,8 +1878,10 @@
                 }
             } catch (e) {
                 setSyncStatus('⚠️ 云端检查失败（离线或配置有误）');
+            } finally {
+                // 放 finally：中途出任何异常都不会把同步锁一直占着 —— 占住会让自动推送永久停摆
+                syncBusy = false;
             }
-            syncBusy = false;
             // 把当前云端指纹记成基准，免得定时探测第一次又白拉一遍全量。
             // 首次检查就失败（离线）时不记，留给定时探测去补救。
             if (lastCloudSha === null) {
@@ -1958,11 +2063,19 @@
             //    这个轮询同时兼作「推送失败自动重试」，保证手机上的改动最终一定能到电脑端。
             if (hasLocalChanges()) {
                 syncBusy = true;
+                let pushed = false;
                 try {
-                    const pushed = await uploadData(true);
-                    if (pushed) showToast('本机改动已同步到云端');
-                    else setSyncStatus('⚠️ 本机改动还没传上去（将自动重试）');
+                    pushed = await uploadData(true);
                 } finally { syncBusy = false; }
+                if (pushed) {
+                    pushRetryCount = 0;
+                    clearTimeout(pushRetryTimer); pushRetryTimer = null;
+                    lastSyncError = '';
+                    hideSyncWarn();
+                    showToast('本机改动已同步到云端');
+                } else {
+                    schedulePushRetry();
+                }
                 return;
             }
 
