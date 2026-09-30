@@ -742,8 +742,8 @@
                         <input type="number" id="retQty" placeholder="0" data-page-node-id="xxnMpjAiWJC8ulL0bBl81B">
                     </div>
                     <div class="form-group" data-page-node-id="PDhQIvQpcXXGmSoLGvXTHz">
-                        <label data-page-node-id="VQgOPI3AG2QkdycM8T9geh">退货金额</label>
-                        <input type="number" id="retPrice" placeholder="0.00" step="0.01" data-page-node-id="k7FPyHmod43tsYoWxzt60n">
+                        <label data-page-node-id="VQgOPI3AG2QkdycM8T9geh">退货单价 (元/件)</label>
+                        <input type="number" id="retPrice" placeholder="每件退了多少钱" step="0.01" data-page-node-id="k7FPyHmod43tsYoWxzt60n">
                     </div>
                     <button type="submit" class="btn btn-warning" data-page-node-id="SMv1UVyEMvJjTh1yt0NCi8">确认退货</button>
                 </form>
@@ -1088,7 +1088,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-27 21:36';
+        const APP_BUILD = '2026-09-30 13:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1111,7 +1111,10 @@
         }
 
         function genId() {
-            return Date.now() + '' + Math.floor(Math.random() * 1000);
+            // 批量入库（整单签收/全部入库/扫码核销）会在同一毫秒连续生成多条记录，
+            // 原来只靠 0-999 的随机数容易撞号，撞号后按 id 删除/编辑会定位到错误的记录
+            genId._c = (genId._c || 0) + 1;
+            return Date.now().toString(36) + '-' + genId._c.toString(36) + '-' + Math.random().toString(36).slice(2, 7);
         }
 
         // 初始化数据（仅首次使用时载入示例）
@@ -1137,7 +1140,9 @@
             document.getElementById('expenseDate').value = todayStr();
             document.getElementById('stockSortSel').value = getStockSort();
 
-            if (appData.records.length === 0 && !localStorage.getItem('pddSeeded')) {
+            // 配置了云同步的设备不再灌示例数据：本机空着就等 initialSync 从云端接回真实数据。
+            // 不然本机存储被系统清空后，会先看到一屏假数据、再被云端数据盖掉，像极了"数据倒退"。
+            if (appData.records.length === 0 && !syncConfigured() && !localStorage.getItem('pddSeeded')) {
                 initialRecords.forEach(record => {
                     const key = record.name.toLowerCase();
                     if (!appData.products[key]) {
@@ -1215,7 +1220,13 @@
             // 从后台切回前台的那一下立刻查：拿起手机就能看到电脑端刚改的内容，不用等下一轮
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') setTimeout(() => pollCloudOnce(true), 400);
-                else flushSyncOnExit();   // 切后台/锁屏也当作「可能要走了」，有未推送的改动就抢发一次
+                else {
+                    // 切后台/锁屏时手机随时可能冻结页面：先趁还活着把改动真实推上去。
+                    // 只靠 pagehide 的 keepalive 抢发不够 —— 请求体超过 64KB 浏览器会直接拒绝发送，
+                    // 带图片的数据全在这个尺寸之上，等于从来没发出去过。
+                    if (syncConfigured() && hasLocalChanges() && !syncBusy) autoPush();
+                    flushSyncOnExit();   // 数据小时再用 keepalive 双保险
+                }
             });
         });
 
@@ -1236,7 +1247,14 @@
                 localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
             } catch (e) {
                 console.warn('本地保存失败', e);
-                showSyncWarn('⚠️ 本机存储写不进去了（多为商品图片太多、占满浏览器配额）。这次的改动在本页面内有效，但刷新后会丢、也不会传到云端 → 建议先点「备份JSON」存一份，再删掉一些商品图片。');
+                // 主存储写满（多为图片撑爆配额）：把去掉图片的轻量版另存一份。
+                // 主数据下次读不到时由 loadData 用它救回流水 —— 改动至少不会因为刷新就没了。
+                try {
+                    const lite = JSON.parse(JSON.stringify(appData));
+                    Object.values(lite.products || {}).forEach(p => { delete p.img; });
+                    localStorage.setItem('pddBizDataLite', JSON.stringify(lite));
+                } catch (e2) {}
+                showSyncWarn('⚠️ 本机存储写不进去了（多为商品图片太多、占满浏览器配额）。这次已把「去掉图片」的数据存进兜底副本，刷新后流水还在；但要彻底解决请先点「备份JSON」存一份，再删掉一些商品图片。');
             }
 
             try { updateDashboard(); } catch (e) { console.warn(e); }
@@ -1268,17 +1286,38 @@
         }
 
         function loadData() {
+            let broken = false;
             try {
                 const saved = localStorage.getItem('pddBizDataPro');
                 if (saved) appData = JSON.parse(saved);
             } catch (e) {
                 console.warn('本地数据解析失败，已重置', e);
                 appData = { products: {}, records: [] };
+                // 本地数据已不可信：必须清掉「已同步」留痕，否则会把这份空数据
+                // 当成"未推送的改动"传上云端，把云端的好数据也盖掉
+                broken = true;
+            }
+            // 主存储读不到（被系统清空 / 写坏 / 配额写满只存了轻量版）时，
+            // 用无图片的兜底副本救回流水和库存 —— 这正是「操作完重开就回到几天前」的主因之一
+            if (!appData.records.length) {
+                try {
+                    const lite = localStorage.getItem('pddBizDataLite');
+                    if (lite) {
+                        const l = JSON.parse(lite);
+                        if (l && ((l.records && l.records.length) || (l.products && Object.keys(l.products).length))) {
+                            appData = l;
+                            setTimeout(() => showToast('⚠️ 本机主存储失效，已从兜底副本恢复（图片丢失，数据还在）'), 1000);
+                        }
+                    }
+                } catch (e) {}
             }
             if (!appData.products) appData.products = {};
             if (!appData.records) appData.records = [];
             if (!appData.purchases) appData.purchases = [];
             if (!appData.updatedAt) appData.updatedAt = 1;
+            if (broken) {
+                try { localStorage.removeItem('pddLastSyncAt'); localStorage.removeItem('pddLastSha'); } catch (e) {}
+            }
         }
 
         function saveFeeRate() {
@@ -1851,8 +1890,11 @@
             try {
                 const cloud = await fetchCloud();
                 if (cloud.notFound) {
-                    // 云端还没有数据文件：本机有真实数据就顺手建起来（示例数据不推）
-                    if (!appData.isSeed) { if (!(await uploadData(true))) schedulePushRetry(); }
+                    // 云端还没有数据文件：本机有真实数据就顺手建起来。
+                    // 示例数据 / 空数据绝不推 —— 不然本机存储出问题时会把云端唯一的好数据抹掉。
+                    const hasReal = !appData.isSeed &&
+                        (appData.records.length > 0 || Object.keys(appData.products).length > 0);
+                    if (hasReal) { if (!(await uploadData(true))) schedulePushRetry(); }
                     else setSyncStatus('云端暂无数据，本机有修改后将自动上传');
                 } else if (appData.isSeed) {
                     adoptCloud(cloud);
@@ -2110,7 +2152,12 @@
             // 不用内存变量 lastCloudUpdatedAt —— 页面一刷新它就是 null，兜底等于关着。
             if (!hasLocalChanges()) return;
             try {
-                const body = { message: 'auto sync on exit', content: utf8ToBase64(JSON.stringify(appData)) };
+                const payload = JSON.stringify(appData);
+                // keepalive 请求浏览器限制请求体 ≤ 64KB，超了会静默发送失败。
+                // 大数据就不白费这次发送了：切后台时已触发过真实 autoPush（fetch 能继续跑），
+                // 真没发出去的话，下次打开时 initialSync 也会自动补推。
+                if (payload.length > 60000) return;
+                const body = { message: 'auto sync on exit', content: utf8ToBase64(payload) };
                 if (cachedSha) body.sha = cachedSha;
                 fetch(githubDataUrl(), {
                     method: 'PUT',
@@ -2280,17 +2327,19 @@
             if (index === -1) return;
             const record = appData.records[index];
             const productName = record.name;
+            // 商品的 key 一律是小写名（name.toLowerCase()），直接用原始名查会漏掉带大写字母的商品
+            const prodKey = String(productName || '').toLowerCase();
             
-            if (appData.products[productName]) {
-                if (record.type === 'in') appData.products[productName].stock -= record.qty;
+            if (appData.products[prodKey]) {
+                if (record.type === 'in') appData.products[prodKey].stock -= record.qty;
                 else if (record.type === 'out') {
                     if (record.saleType === 'split') {
-                        appData.products[productName].stock += record.qty / (record.splitQty || 1);
+                        appData.products[prodKey].stock += record.qty / (record.splitQty || 1);
                     } else {
-                        appData.products[productName].stock += record.qty;
+                        appData.products[prodKey].stock += record.qty;
                     }
                 }
-                else if (record.type === 'return') appData.products[productName].stock -= record.qty;
+                else if (record.type === 'return') appData.products[prodKey].stock -= record.qty;
             }
 
             appData.records.splice(index, 1);
@@ -2339,19 +2388,21 @@
 
             const oldName = record.name;
             const oldQty = record.qty;
+            const oldCost = parseFloat(record.cost) || 0;
             const oldSplitQty = record.splitQty || 1;
             const oldSaleType = record.saleType || 'whole';
+            const oldKey = String(oldName || '').toLowerCase();
 
-            if (appData.products[oldName]) {
-                if (record.type === 'in') appData.products[oldName].stock -= oldQty;
+            if (appData.products[oldKey]) {
+                if (record.type === 'in') appData.products[oldKey].stock -= oldQty;
                 if (record.type === 'out') {
                     if (oldSaleType === 'split') {
-                        appData.products[oldName].stock += oldQty / oldSplitQty;
+                        appData.products[oldKey].stock += oldQty / oldSplitQty;
                     } else {
-                        appData.products[oldName].stock += oldQty;
+                        appData.products[oldKey].stock += oldQty;
                     }
                 }
-                if (record.type === 'return') appData.products[oldName].stock -= oldQty;
+                if (record.type === 'return') appData.products[oldKey].stock -= oldQty;
             }
 
             record.name = document.getElementById('editName').value.trim() || record.name;
@@ -2377,7 +2428,14 @@
             if (!appData.products[newNameKey]) appData.products[newNameKey] = { name: record.name, cost: record.cost || 0, stock: 0 };
             
             const prod = appData.products[newNameKey];
-            if (record.cost > 0) prod.cost = record.cost;
+            // 只有入库记录参与成本均价：按「池子里扣掉旧贡献、再加上新值」的加权平均调整。
+            // 出单/退货记录里的成本只是算利润用的快照，编辑它们不该动均价；
+            // 更不能拿这条记录的单价直接覆盖均价（否则改一条旧记录就把整批均价冲掉了）。
+            if (record.type === 'in' && record.cost > 0 && newNameKey === oldKey) {
+                const poolVal = Math.max(0, (prod.cost || 0) * (prod.stock + oldQty) - oldQty * oldCost);
+                const editedStock = prod.stock + record.qty;
+                if (editedStock > 0) prod.cost = (poolVal + record.qty * record.cost) / editedStock;
+            }
 
             if (record.type === 'in') prod.stock += record.qty;
             if (record.type === 'out') {
@@ -2432,6 +2490,11 @@
             const name = document.getElementById('retName').value.trim();
             const qty = parseFloat(document.getElementById('retQty').value);
             const price = parseFloat(document.getElementById('retPrice').value);
+
+            // 不校验的话，空值会以 NaN 直接加进库存，库存价值/利润会整页变成 NaN
+            if (!name) { alert('请输入或选择商品名称'); return; }
+            if (isNaN(qty) || qty <= 0) { alert('请输入有效的退货数量'); return; }
+            if (isNaN(price) || price < 0) { alert('请输入有效的退货单价'); return; }
 
             const key = name.toLowerCase();
             if (!appData.products[key]) appData.products[key] = { name, cost: 0, stock: 0 };
@@ -2579,11 +2642,14 @@
                 } else if (r.type === 'expense') {
                     expenseTotal += r.qty; totalCost += r.qty;
                 } else if (r.type === 'return') {
-                    const amt = r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
-                    sales -= amt;
-                    refundTotal += amt;
+                    // 冲减口径与「今日速览 / 月报」一致：只冲货款。
+                    // 之前用 totalReturn（货款+手续费）冲减，手续费会在出单、退货时各扣一次，
+                    // 全额退款后「销售额(实收)」会被算成负数。
+                    const goods = (r.price || 0) * (r.qty || 0);
+                    sales -= goods;
+                    refundTotal += goods;
                     // 退货：这笔销售不算数 → 货款冲掉
-                    pureSales -= (r.price || 0) * (r.qty || 0);
+                    pureSales -= goods;
                     // 但货是退回来重新入库的，成本要跟着还回来。
                     // ⇒ 退款对利润的影响 = 这笔订单的「利润」，而不是整个货价。
                     returnedCost += returnUnitCost(r) * (r.qty || 0);
@@ -4459,7 +4525,7 @@ function findByTracking(rawInput, allowFuzzy) {
             if (!box) return;
             const start = todayStartTs();
             let orderCount = 0, qtySold = 0, sales = 0, profit = 0;
-            let retCnt = 0, retAmt = 0, inCnt = 0, shipExp = 0, otherExp = 0;
+            let retCnt = 0, retAmt = 0, inCnt = 0, inAmt = 0, shipExp = 0, otherExp = 0;
             (appData.records || []).forEach(r => {
                 const t = new Date(r.timestamp).getTime();
                 if (isNaN(t) || t < start) return;
@@ -4475,6 +4541,7 @@ function findByTracking(rawInput, allowFuzzy) {
                     profit -= ((r.price || 0) - returnUnitCost(r)) * (r.qty || 0);
                 } else if (r.type === 'in') {
                     inCnt++;
+                    inAmt += (r.cost || 0) * (r.qty || 0);   // 入库金额 = 单价 × 数量
                 } else if (r.type === 'ship') {
                     shipExp += r.qty || 0;
                 } else if (r.type === 'expense') {
@@ -4488,6 +4555,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 { l: '今日销售额', v: orderCount || retCnt ? money(sales) : '—' },
                 { l: '出单记录', v: (orderCount || 0) + ' 条' },
                 { l: '今日入库', v: inCnt ? (inCnt + ' 笔') : '—' },
+                { l: '入库金额', v: inCnt ? money(inAmt) : '—' },
                 { l: '今日退货', v: retCnt ? (retCnt + ' 笔') : '—' },
                 { l: '今日支出', v: (shipExp + otherExp) ? money(shipExp + otherExp) : '—' }
             ];
@@ -4698,7 +4766,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 } else if (r.type === 'expense') {
                     otherExp += r.qty; profit -= r.qty;
                 } else if (r.type === 'return') {
-                    refundTotal += r.totalReturn != null ? r.totalReturn : (r.price || 0) * r.qty;
+                    refundTotal += (r.price || 0) * (r.qty || 0);   // 退款按货款算，避免带上手续费后退款率虚高
                     // 与经营概览同口径：退款只冲掉这笔订单的利润
                     // （货退回库存，成本要还回来，不是整单价）
                     profit -= ((r.price || 0) * (r.qty || 0) - returnUnitCost(r) * (r.qty || 0));
