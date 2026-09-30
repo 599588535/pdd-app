@@ -1088,7 +1088,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-30 13:00';
+        const APP_BUILD = '2026-09-30 14:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1277,7 +1277,15 @@
             if (appData.isSeed) return false;          // 示例数据不算改动
             let synced = null;
             try { synced = localStorage.getItem('pddLastSyncAt'); } catch (e) {}
-            if (synced !== null) return String(appData.updatedAt) !== String(synced);
+            if ((synced === null || synced === '') && appData._syncedAt != null) synced = String(appData._syncedAt);
+            if (synced !== null) {
+                // ⚠️ 关键防线：本机数据比「上次推送成功」的版本还旧，说明推送之后本机就再没存进去过
+                // （存储写满 / 被系统清掉），最新那份只在云端 —— 此时本机绝不能当成"有未推送的改动"，
+                // 否则重开页面就会拿这份旧数据把云端盖回去，
+                // 正是「手机操作完退出，再进去又回到操作前」的元凶。
+                if (Number(synced) > Number(appData.updatedAt || 0)) return false;
+                return String(appData.updatedAt) !== String(synced);
+            }
             // 从没成功同步过：本机已经有真实业务数据，就当作有未推送的改动
             // （也要看商品：只建过商品、还没有任何流水时，也不能当成「没改动」而不推）
             return (appData.records && appData.records.length > 0) ||
@@ -1379,8 +1387,9 @@
         let pushRetryTimer = null;
         let lastSyncError = '';         // 最近一次推送失败的原因，显示在提示条上
 
-        // 另一台设备改了数据后，这边多久去云端瞄一眼（只读一个几百字节的文件指纹，不变就不下载）
-        const CLOUD_POLL_MS = 90000;
+        // 另一台设备改了数据后，这边多久去云端瞄一眼（只读一个几百字节的文件指纹，不变就不下载）。
+        // 60 秒：探测请求很小，加密一点频率，电脑端能更快看到手机上刚录的内容
+        const CLOUD_POLL_MS = 60000;
         let cloudPollTimer = null;
         let lastCloudSha = null;        // 最近一次确认与云端一致的文件指纹
 
@@ -1773,6 +1782,10 @@
                             localStorage.setItem('pddLastSha', newSha);
                         }
                     } catch (e) {}
+                    // 标记「这份数据已与云端一致」：既写小键值，也写进数据本体（appData._syncedAt，
+                    // 下次保存时随数据落盘）。小键值在存储写满时反而能存活、数据本体挂了它还在 ——
+                    // hasLocalChanges 靠它识别"本机是旧的、云端才是新的"，绝不能反向覆盖。
+                    appData._syncedAt = appData.updatedAt;
                     try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
                     setSyncStatus('✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
                     if (!silent) showToast('数据已推送到云端');
@@ -1879,6 +1892,7 @@
             appData.isSeed = false;
             saveData(true);   // 保留云端那份 updatedAt，本机才能认出「这份就是云端那份」
             lastCloudUpdatedAt = appData.updatedAt; // 已与云端一致，不再回推
+            appData._syncedAt = appData.updatedAt;
             try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
         }
 
