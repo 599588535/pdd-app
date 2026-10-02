@@ -915,20 +915,29 @@
                 <div class="calc-result" id="calcResult" data-page-node-id="WEDFRFz1qiea1s13WSGHsH">请输入价格进行计算</div>
             </div>
 
-            <!-- GitHub 云端同步模块 -->
+            <!-- 云端同步模块（GitHub / Gitee） -->
             <div class="card" data-page-node-id="S07aGFbdTYcxCXASGcddhR">
-                <div class="card-header" style="border-left-color: var(--info);" data-page-node-id="rjaPqMw9q20ZayFwC3Uetg">☁️ GitHub 云端同步</div>
+                <div class="card-header" style="border-left-color: var(--info);" data-page-node-id="rjaPqMw9q20ZayFwC3Uetg">☁️ 云端同步（手机 ⇄ 电脑）</div>
+                <div class="form-group">
+                    <label>同步平台（国内网络推荐选 Gitee，直连快、成功率高）</label>
+                    <div class="select-wrapper">
+                        <select id="ghPlatform" onchange="onPlatformChange()">
+                            <option value="github">GitHub（国外，速度看网络）</option>
+                            <option value="gitee">Gitee 码云（国内直连，推荐）</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group" data-page-node-id="IW2rvETzTXzmokzUbQshFk">
-                    <label data-page-node-id="7wZQc69XHRrErh6OiviWaA">GitHub 用户名</label>
-                    <input type="text" id="ghUser" placeholder="您的 GitHub 用户名" data-page-node-id="AX2MD7Y7qJFBve2UufzLYv">
+                    <label data-page-node-id="7wZQc69XHRrErh6OiviWaA">用户名</label>
+                    <input type="text" id="ghUser" placeholder="GitHub / Gitee 的用户名" data-page-node-id="AX2MD7Y6qFBve2UufzLYv">
                 </div>
-                <div class="form-group" data-page-node-id="mBsPyjpwtCFIEFkdave7Lo">
-                    <label data-page-node-id="tjE9Rpc3hpq7WdlUUVr1Zw">仓库名称</label>
-                    <input type="text" id="ghRepo" placeholder="例如：pdd-data" data-page-node-id="kbYgfEw0Fou2Xt3HdTRAEJ">
+                <div class="form-group" data-page-node-id="mBsPyjpwtCFIEk1dave7Lo">
+                    <label data-page-node-id="tjE9Rpc3hq7WdlUUVr1Zw">仓库名称</label>
+                    <input type="text" id="ghRepo" placeholder="例如：pdd-data（私有仓库）" data-page-node-id="kbYgfEw0Fou2f3dTRAEJ">
                 </div>
-                <div class="form-group" data-page-node-id="tWUWkejodHDaP5FoDRcnAX">
-                    <label data-page-node-id="mSwtPrhlMJ0wwP53taaPN7">Personal Access Token</label>
-                    <input type="password" id="ghToken" placeholder="ghp_..." data-page-node-id="S3PbnBPv35XicVADacsbwq">
+                <div class="form-group" data-page-node-id="tWUWkejodHDaVU3P53taaPNj">
+                    <label data-page-node-id="mSwtPrhlMJ0wwP53taaPNj">访问令牌 (Token)</label>
+                    <input type="password" id="ghToken" placeholder="GitHub: ghp_... ｜ Gitee: 私人令牌" data-page-node-id="S3PbnBPv35XicVADacsbwq">
                 </div>
                 <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;" data-page-node-id="TkvsBXBWXZPrUm5LqfzOzS">
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="saveGithubConfig()" data-page-node-id="QUjtDiWoLHZxFbaW2NwLzV">💾 保存配置</button>
@@ -941,7 +950,7 @@
                 <div id="syncDiagTools" style="display: none; gap: 10px; margin-top: 8px;" data-page-node-id="cfDiagTools1">
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="copySyncDiag()" data-page-node-id="cfDiagCopy1">📋 复制测试结果</button>
                 </div>
-                <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;" data-page-node-id="uixiUWFIf0lk6RPdXWpLbx">*配置并保存后自动开启：修改约3秒后自动上传，打开页面自动拉取云端较新数据<br data-page-node-id="YlNrBTOAv9Up7UizHgTMyA">*建议数据仓库存<b data-page-node-id="zBXF85AjZDzgAzmeFvinKQ">私有</b>仓库（数据不公开），程序文件可放公开仓库生成网址供手机访问</small>
+                <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;" data-page-node-id="uixiUWFIf0lk6RPdXWpLbx">*配置并保存后自动开启：修改后自动上传、打开页面自动拉取云端较新数据<br data-page-node-id="YlNrBTOAv9Up7UizHgTMyA">*建议数据仓库都用<b data-page-node-id="zBXF85AjZDzgAzmeFvinKQ">私有</b>仓库（数据不公开）。选 Gitee 时：gitee.com → 设置 → 安全设置 → 私人令牌 → 勾选 <b>projects</b> 权限 → 生成后粘贴到上面</small>
             </div>
 
             <!-- 版本体检（新增） -->
@@ -968,6 +977,9 @@
                     <button class="btn btn-outline btn-sm" onclick="triggerImport()" data-page-node-id="B2IwUB84MkA95b82s2TUIt">📥 导入恢复</button>
                     <button class="btn btn-outline btn-sm" onclick="exportCSV()" data-page-node-id="pIfROremVGuGQAsHBHZuDx">📊 导出CSV</button>
                     <button class="btn btn-outline btn-sm" style="color: var(--danger); border-color: rgba(255,23,68,0.4);" onclick="clearAllData()" data-page-node-id="yXA7dtw9uExOnI2PHMHEUV">🗑️ 清空数据</button>
+                </div>
+                <div id="conflictBackupRow" style="display:none; margin-top:8px;">
+                    <button class="btn btn-outline btn-sm" style="color: var(--warning); border-color: rgba(255,171,64,0.5);" onclick="downloadConflictBackup()">⚠️ 导出冲突备份（同步时被云端覆盖前的本机数据）</button>
                 </div>
                 <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(this)" data-page-node-id="CBuxQH2y2EESSbu1JBunVg">
                 <input type="file" id="productImgFile" style="display: none;" accept="image/*" onchange="onProductImgChosen(this)" data-page-node-id="prodImgFile01">
@@ -1081,14 +1093,15 @@
         let ghConfig = {
             user: '',
             repo: '',
-            token: ''
+            token: '',
+            platform: 'github'
         };
 
         const DEFAULT_FEE_RATE = 0.006;
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-09-30 14:00';
+        const APP_BUILD = '2026-10-02 12:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1175,6 +1188,7 @@
             
             updateDashboard();
             renderAllLists();
+            checkConflictBackup();   // 有冲突备份就在管理页亮出导出按钮
 
             // 每次打开页面体检一次 0 库存商品（连续 7 天没库存的自动清理，历史流水保留）
             runZeroStockMaintenance(true);
@@ -1345,8 +1359,11 @@
             ghConfig.user = document.getElementById('ghUser').value.trim();
             ghConfig.repo = document.getElementById('ghRepo').value.trim();
             ghConfig.token = document.getElementById('ghToken').value.trim();
+            const sel = document.getElementById('ghPlatform');
+            ghConfig.platform = (sel && sel.value === 'gitee') ? 'gitee' : 'github';
             localStorage.setItem('ghConfig', JSON.stringify(ghConfig));
-            showToast('配置已保存');
+            try { localStorage.removeItem('pddCloudChannel'); } catch (e) {}   // 换平台后通道记忆作废
+            showToast('配置已保存（' + (isGitee() ? 'Gitee' : 'GitHub') + '）');
             if (syncConfigured()) initialSync();
         }
 
@@ -1358,6 +1375,19 @@
                 document.getElementById('ghRepo').value = ghConfig.repo;
                 document.getElementById('ghToken').value = ghConfig.token;
             }
+            const sel = document.getElementById('ghPlatform');
+            if (sel) sel.value = isGitee() ? 'gitee' : 'github';
+            onPlatformChange();
+        }
+
+        // 切平台时更新令牌输入框的提示文案（配置仍需点「保存配置」才生效）
+        function onPlatformChange() {
+            const sel = document.getElementById('ghPlatform');
+            const tk = document.getElementById('ghToken');
+            if (!sel || !tk) return;
+            tk.placeholder = sel.value === 'gitee'
+                ? 'Gitee 私人令牌（设置 → 私人令牌 → 勾选 projects 生成）'
+                : 'ghp_...';
         }
 
         function utf8ToBase64(str) {
@@ -1403,11 +1433,23 @@
         function syncConfigured() {
             return !!(ghConfig.user && ghConfig.repo && ghConfig.token);
         }
-        function githubDataUrl() {
+        // 同步平台：github（默认，老配置没存 platform 也算它） / gitee（国内直连快、成功率高）
+        function isGitee() { return ghConfig.platform === 'gitee'; }
+        function dataApiUrl() {
+            if (isGitee()) {
+                return `https://gitee.com/api/v5/repos/${ghConfig.user}/${ghConfig.repo}/contents/${FILE_NAME}?access_token=${encodeURIComponent(ghConfig.token)}`;
+            }
             return `https://api.github.com/repos/${ghConfig.user}/${ghConfig.repo}/contents/${FILE_NAME}`;
+        }
+        function authHeaders() {
+            // Gitee 用 access_token 查询参数鉴权（已含在 URL 里），不走 Authorization 头
+            return isGitee() ? {} : { Authorization: 'token ' + ghConfig.token };
         }
         function githubRawUrl(branch) {
             return `https://raw.githubusercontent.com/${ghConfig.user}/${ghConfig.repo}/${branch}/${FILE_NAME}?t=${Date.now()}`;
+        }
+        function giteeRawUrl(branch) {
+            return `https://gitee.com/${ghConfig.user}/${ghConfig.repo}/raw/${branch}/${FILE_NAME}?access_token=${encodeURIComponent(ghConfig.token)}&t=${Date.now()}`;
         }
         function githubCdnUrl(branch) {
             return `https://cdn.jsdelivr.net/gh/${ghConfig.user}/${ghConfig.repo}@${branch}/${FILE_NAME}?t=${Date.now()}`;
@@ -1420,14 +1462,24 @@
            （本地数据带商品图片 base64，很容易超过 1MB。）
            后面几条免 Token 直链只对「公开仓库」有效，私有仓库会 404，仅作兜底。 */
         function cloudChannels() {
-            const list = [
-                { name: 'GitHub API（原始文件）', kind: 'api', asRaw: true, url: githubDataUrl(), headers: { Authorization: 'token ' + ghConfig.token, Accept: 'application/vnd.github.raw' } },
-                { name: 'GitHub API（base64）', kind: 'api', url: githubDataUrl(), headers: { Authorization: 'token ' + ghConfig.token } },
-                { name: 'raw 直链 main', kind: 'file', url: githubRawUrl('main') },
-                { name: 'raw 直链 master', kind: 'file', url: githubRawUrl('master') },
-                { name: 'jsDelivr(main)', kind: 'file', url: githubCdnUrl('main') },
-                { name: 'jsDelivr(master)', kind: 'file', url: githubCdnUrl('master') }
-            ];
+            let list;
+            if (isGitee()) {
+                // Gitee：raw 直链带 token 私有仓库也能读，任意体积；blob 接口做兜底
+                list = [
+                    { name: 'Gitee raw(master)', kind: 'file', url: giteeRawUrl('master') },
+                    { name: 'Gitee raw(main)', kind: 'file', url: giteeRawUrl('main') },
+                    { name: 'Gitee API(大文件)', kind: 'gblob', url: dataApiUrl() }
+                ];
+            } else {
+                list = [
+                    { name: 'GitHub API（原始文件）', kind: 'api', asRaw: true, url: dataApiUrl(), headers: Object.assign({ Accept: 'application/vnd.github.raw' }, authHeaders()) },
+                    { name: 'GitHub API（base64）', kind: 'api', url: dataApiUrl(), headers: authHeaders() },
+                    { name: 'raw 直链 main', kind: 'file', url: githubRawUrl('main') },
+                    { name: 'raw 直链 master', kind: 'file', url: githubRawUrl('master') },
+                    { name: 'jsDelivr(main)', kind: 'file', url: githubCdnUrl('main') },
+                    { name: 'jsDelivr(master)', kind: 'file', url: githubCdnUrl('master') }
+                ];
+            }
             // 上次成功的通道排最前：手机上有时候只有某一条通，避免每次都先白等不通的那几条
             let pref = '';
             try { pref = localStorage.getItem('pddCloudChannel') || ''; } catch (e) {}
@@ -1501,6 +1553,10 @@
         async function checkOnlineVersion() {
             const out = document.getElementById('verCheckResult');
             const set = (t) => { if (out) out.innerText = t; };
+            if (isGitee()) {
+                set('数据走的是 Gitee 同步，这一步只检查 GitHub 托管的「程序页面」版本，与数据同步无关，可跳过。');
+                return;
+            }
             const uEl = document.getElementById('ghUser');
             const rEl = document.getElementById('ghRepo');
             const tEl = document.getElementById('ghToken');
@@ -1737,10 +1793,10 @@
         }
 
         async function uploadData(silent) {
-            const url = githubDataUrl();
+            const url = dataApiUrl();
             let sha = cachedSha === null ? '' : cachedSha;
             try {
-                const getRes = await fetchWithTimeout(url, { headers: { Authorization: `token ${ghConfig.token}` }, cache: 'no-store' }, 12000);
+                const getRes = await fetchWithTimeout(url, { headers: authHeaders(), cache: 'no-store' }, 12000);
                 if (getRes.status === 200) {
                     // 用 readJsonSafe：空响应会给出人话错误，而不是看不懂的 JSON 解析报错
                     const meta = await readJsonSafe(getRes, '读取云端文件信息');
@@ -1762,9 +1818,10 @@
                 const putTimeout = sizeKb > 800 ? 150000 : (sizeKb > 300 ? 75000 : 30000);
                 const body = { message: '数据同步 ' + new Date().toLocaleString('zh-CN', { hour12: false }), content: utf8ToBase64(payload) };
                 if (sha) body.sha = sha;
+                if (isGitee()) body.access_token = ghConfig.token;   // Gitee 的 PUT 在 body 里带令牌
                 const putRes = await fetchWithTimeout(url, {
                     method: 'PUT',
-                    headers: { Authorization: `token ${ghConfig.token}`, 'Content-Type': 'application/json' },
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
                     body: JSON.stringify(body)
                 }, putTimeout);
                 if (putRes.status === 200 || putRes.status === 201) {
@@ -1865,6 +1922,35 @@
                     return cloud;
                 }
 
+                // Gitee 大文件通道：contents 接口先拿文件指纹，再用 blobs 接口取完整内容
+                if (ch.kind === 'gblob') {
+                    if (res.status === 404) { cachedSha = ''; return { notFound: true }; }
+                    if (res.status === 401 || res.status === 403) {
+                        fails.push(ch.name + ' → HTTP ' + res.status + '（令牌无效或没勾 projects 权限）');
+                        continue;
+                    }
+                    if (!res.ok) { fails.push(ch.name + ' → HTTP ' + res.status); continue; }
+                    let meta;
+                    try { meta = await readJsonSafe(res, ch.name); }
+                    catch (e) { fails.push(e.message); continue; }
+                    if (!meta || !meta.sha) { fails.push(ch.name + ' → 拿不到文件指纹'); continue; }
+                    cachedSha = meta.sha;
+                    const blobUrl = `https://gitee.com/api/v5/repos/${ghConfig.user}/${ghConfig.repo}/git/blobs/${meta.sha}?access_token=${encodeURIComponent(ghConfig.token)}`;
+                    const bRes = await fetchWithTimeout(blobUrl, { cache: 'no-store' }, 12000);
+                    if (!bRes.ok) { fails.push(ch.name + ' → blob HTTP ' + bRes.status); continue; }
+                    let bj;
+                    try { bj = await readJsonSafe(bRes, ch.name); }
+                    catch (e) { fails.push(e.message); continue; }
+                    const bcontent = String((bj && bj.content) || '').replace(/\s/g, '');
+                    if (!bcontent) { fails.push(ch.name + ' → blob 内容为空'); continue; }
+                    let cloud;
+                    try { cloud = JSON.parse(base64ToUtf8(bcontent)); }
+                    catch (e) { fails.push(ch.name + ' → 数据解析失败：' + e.message); continue; }
+                    lastCloudChannel = ch.name;
+                    rememberCloudChannel(ch.name);
+                    return cloud;
+                }
+
                 // 免 Token 的直链通道：返回的就是 JSON 文件原文
                 if (res.status === 404) { fails.push(ch.name + ' → HTTP 404（该分支不存在，或仓库是私有的读不到）'); continue; }
                 if (!res.ok) { fails.push(ch.name + ' → HTTP ' + res.status); continue; }
@@ -1894,6 +1980,7 @@
             lastCloudUpdatedAt = appData.updatedAt; // 已与云端一致，不再回推
             appData._syncedAt = appData.updatedAt;
             try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
+            checkConflictBackup();   // 覆盖前留了备份 → 管理页亮出导出按钮
         }
 
         async function initialSync() {
@@ -1915,14 +2002,23 @@
                     renderAllLists();
                     showToast('已自动同步云端最新数据');
                 } else if (hasLocalChanges()) {
-                    // 本机有「改过还没推上去」的数据 → 先把它传上去，绝不拿云端覆盖它。
-                    // 旧逻辑在这里比的是两台设备的本地时钟，手机时钟一慢就会误判、
-                    // 把手机刚录的单当成"旧数据"丢掉。
-                    setSyncStatus('本机有未同步的改动，正在上传...');
-                    const pushed = await uploadData(true);
-                    if (!pushed) {
-                        setSyncStatus('⚠️ 本机改动还没传上去（网络问题），本机数据已保留');
-                        schedulePushRetry();   // 打开页面时的推送失败同样要自动重试
+                    // 本机有「改过还没推上去」的改动 —— 但先看一眼云端时间再动手：
+                    // 另一台设备（比如手机）可能刚推了更新的数据上去，这时候绝不能拿本机旧的盖上去，
+                    // 否则就是「手机新录的数据被电脑旧数据顶掉」。
+                    // 只有本机数据确实不比云端旧时才推；云端更新时改为接收云端，
+                    // 本机这份（含没推上去的改动）会自动留一份冲突备份，管理页可导出。
+                    if (cloud.updatedAt && appData.updatedAt && Number(cloud.updatedAt) > Number(appData.updatedAt)) {
+                        adoptCloud(cloud);
+                        renderAllLists();
+                        checkConflictBackup();
+                        showToast('云端有更新的数据，已接收（本机改动已自动备份）');
+                    } else {
+                        setSyncStatus('本机有未同步的改动，正在上传...');
+                        const pushed = await uploadData(true);
+                        if (!pushed) {
+                            setSyncStatus('⚠️ 本机改动还没传上去（网络问题），本机数据已保留');
+                            schedulePushRetry();   // 打开页面时的推送失败同样要自动重试
+                        }
                     }
                 } else if (String(cloud.updatedAt) !== String(appData.updatedAt)) {
                     adoptCloud(cloud);
@@ -2087,8 +2183,8 @@
         async function probeCloudSha() {
             if (!syncConfigured()) return null;
             try {
-                const res = await fetchWithTimeout(githubDataUrl(), {
-                    headers: { Authorization: 'token ' + ghConfig.token },
+                const res = await fetchWithTimeout(dataApiUrl(), {
+                    headers: authHeaders(),
                     cache: 'no-store'
                 }, 12000);
                 if (res.status === 404) return '';      // 云端还没有这个文件
@@ -2115,9 +2211,27 @@
             if (document.visibilityState !== 'visible') return;
             if (anyModalOpen()) return;                 // 正在弹窗填写时不打扰
 
-            // ① 本机有「改过还没推上去」的数据 → 先把它送上去，绝不拉云端覆盖它。
+            // ① 本机有「改过还没推上去」的数据 → 先把它送上去。
+            //    但如果云端刚被另一台设备更新过（指纹变了），先比时间：云端更新就收下云端，
+            //    绝不拿本机旧的盖上去 —— 不然电脑页面开着不动，也会把手机刚录的单顶掉。
             //    这个轮询同时兼作「推送失败自动重试」，保证手机上的改动最终一定能到电脑端。
             if (hasLocalChanges()) {
+                const sha0 = await probeCloudSha();
+                if (sha0 && sha0 !== lastCloudSha) {
+                    syncBusy = true;
+                    let newer = null;
+                    try { newer = await fetchCloud(); } catch (e) { newer = null; } finally { syncBusy = false; }
+                    if (newer && !newer.notFound && newer.updatedAt && appData.updatedAt &&
+                        Number(newer.updatedAt) > Number(appData.updatedAt)) {
+                        lastCloudSha = sha0;
+                        adoptCloud(newer);
+                        renderAllLists();
+                        checkConflictBackup();
+                        showToast('云端有更新的数据，已接收（本机改动已自动备份）');
+                        return;
+                    }
+                    // 云端不比本机新（或没比出来）→ 按原逻辑继续推送本机改动
+                }
                 syncBusy = true;
                 let pushed = false;
                 try {
@@ -2173,10 +2287,11 @@
                 if (payload.length > 60000) return;
                 const body = { message: 'auto sync on exit', content: utf8ToBase64(payload) };
                 if (cachedSha) body.sha = cachedSha;
-                fetch(githubDataUrl(), {
+                if (isGitee()) body.access_token = ghConfig.token;
+                fetch(dataApiUrl(), {
                     method: 'PUT',
                     keepalive: true,
-                    headers: { Authorization: `token ${ghConfig.token}`, 'Content-Type': 'application/json' },
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
                     body: JSON.stringify(body)
                 });
             } catch (e) {}
@@ -4471,6 +4586,22 @@ function findByTracking(rawInput, allowFuzzy) {
                 } catch (err) { alert('文件解析失败'); }
             };
             reader.readAsText(file);
+        }
+
+        // 同步时本机数据被云端覆盖前，会自动把本机那份存进 pddConflictBackup。
+        // 管理页给出导出入口，万一里面有你还没推上去的改动，可以从这里捞回来。
+        function checkConflictBackup() {
+            try {
+                const el = document.getElementById('conflictBackupRow');
+                if (el) el.style.display = localStorage.getItem('pddConflictBackup') ? 'block' : 'none';
+            } catch (e) {}
+        }
+        function downloadConflictBackup() {
+            let raw = null;
+            try { raw = localStorage.getItem('pddConflictBackup'); } catch (e) {}
+            if (!raw) { showToast('没有冲突备份'); return; }
+            downloadFile(raw, `冲突备份_${todayStr()}.json`, 'application/json');
+            showToast('已导出冲突备份，可用「导入恢复」找回');
         }
 
         function clearAllData() {
