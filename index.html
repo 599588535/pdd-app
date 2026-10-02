@@ -1101,7 +1101,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-02 13:00';
+        const APP_BUILD = '2026-10-02 14:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -2090,85 +2090,152 @@
             const tools = document.getElementById('syncDiagTools');
             const lines = [];
             const put = () => { if (d) { d.innerText = lines.join('\n'); d.classList.add('show'); } };
+            const platName = isGitee() ? 'Gitee' : 'GitHub';
 
             if (!syncConfigured()) {
-                lines.push('⚠️ 请先填写「GitHub 用户名 / 仓库名称 / Token」，点「💾 保存配置」后再测试。');
+                lines.push('⚠️ 请先填写「用户名 / 仓库名称 / 令牌」，选好平台，点「💾 保存配置」后再测试。');
                 put(); cloudDiagText = lines.join('\n');
                 if (tools) tools.style.display = 'flex';
                 return;
             }
             if (d) d.classList.add('show');
             if (tools) tools.style.display = 'flex';
-            lines.push('云端连通测试 · 页面版本 ' + APP_BUILD);
+            lines.push('云端连通测试 · 页面版本 ' + APP_BUILD + '（平台：' + platName + '）');
             lines.push('仓库：' + ghConfig.user + '/' + ghConfig.repo + '　文件：' + FILE_NAME);
             lines.push('时间：' + new Date().toLocaleString('zh-CN', { hour12: false }));
             lines.push('');
             put();
-            setSyncStatus('🔌 正在测试各通道...');
+            setSyncStatus('🔄 正在测试各通道...');
 
             const channels = cloudChannels();
-            let okCount = 0, firstOk = '', apiReachable = false;
+            let okCount = 0, firstOk = '', serverReached = false, tokenProblem = false, fileMissing = false;
             for (let i = 0; i < channels.length; i++) {
                 const ch = channels[i];
                 const t0 = Date.now();
                 let line = '';
                 try {
                     const res = await fetchWithTimeout(ch.url, { headers: ch.headers || {}, cache: 'no-store' }, 12000);
-                    if (ch.kind === 'api' && res.ok) apiReachable = true;
-                    if (res.status === 404) {
-                        line = '✗ HTTP 404（分支或文件不存在，或仓库是私有的读不到）';
-                    } else if (!res.ok) {
-                        line = '✗ HTTP ' + res.status;
-                    } else {
-                        let text = '';
-                        try { text = await res.text(); } catch (e) { text = ''; }
-                        if (!text.trim()) {
-                            line = '✗ 200 但内容为空 ← 手机网络被拦截的典型表现';
+                    // 「API 类」通道只要服务器回了 HTTP 状态码，就证明网络是通的
+                    if (ch.kind === 'api' || ch.kind === 'gblob') serverReached = true;
+                    if (ch.kind === 'gblob') {
+                        // Gitee 大文件通道：404 = 仓库里还没有数据文件（首次配置的正常状态）
+                        if (res.status === 404) {
+                            fileMissing = true;
+                            line = '✓ 网络通、令牌有效 —— 云端还没有数据文件（正常，点一次「⬆️ 推送到云端」就有了）';
+                        } else if (res.status === 401 || res.status === 403) {
+                            tokenProblem = true;
+                            line = '✗ HTTP ' + res.status + '（令牌无效，或生成时没勾 projects 权限）';
+                        } else if (!res.ok) {
+                            line = '✗ HTTP ' + res.status;
                         } else {
+                            let text = '';
+                            try { text = await withTimeout(res.text(), 20000, '内容读取超时'); } catch (e) { text = ''; }
+                            let o = null;
+                            try { o = JSON.parse(text); } catch (e) { o = null; }
+                            if (o && (o.products || o.records)) {
+                                okCount++; if (!firstOk) firstOk = ch.name;
+                                line = '✓ 正常，已读到云端数据（' + Object.keys(o.products || {}).length + ' 个商品 / ' + (o.records || []).length + ' 条流水）';
+                            } else {
+                                line = '⚠️ 200 但内容不是本应用的数据（仓库里可能放了别的文件）';
+                            }
+                        }
+                    } else if (ch.kind === 'api') {
+                        if (res.status === 404) {
+                            // 官方 API 的 404：要么文件还没传过（首次配置的正常状态），要么私有仓库+令牌无效被当作 404
+                            fileMissing = true;
+                            line = '✓ 网络通 —— 云端还没有数据文件（首次推送后就有）';
+                        } else if (res.status === 401 || res.status === 403) {
+                            tokenProblem = true;
+                            line = '✗ HTTP ' + res.status + '（令牌无效或权限不够）';
+                        } else if (!res.ok) {
+                            line = '✗ HTTP ' + res.status;
+                        } else {
+                            let text = '';
+                            try { text = await withTimeout(res.text(), 20000, '内容读取超时'); } catch (e) { text = ''; }
+                            if (!text.trim()) {
+                                line = '⚠️ 200 但内容为空 ← 手机网络被拦截的典型表现';
+                            } else {
+                                let o = null;
+                                try { o = JSON.parse(text); } catch (e) { o = null; }
+                                const kb = Math.round(text.length / 1024 * 10) / 10;
+                                let valid = false, note = '';
+                                if (o && (o.products || o.records)) {
+                                    valid = true;
+                                    note = '，已识别为有效数据（' + (o.updatedAt ? '云端时间戳 ' + o.updatedAt + '，' : '') +
+                                           Object.keys(o.products || {}).length + ' 个商品 / ' + (o.records || []).length + ' 条流水）';
+                                } else if (o && typeof o.content === 'string') {
+                                    note = o.content
+                                        ? '（base64 包装格式，程序会自动解开）'
+                                        : '（⚠️ 里面没有文件内容：云端数据超过 1MB 时接口就不给了 → 请改用「原始文件」通道）';
+                                } else {
+                                    note = '（不是本应用的数据文件）';
+                                }
+                                line = (valid ? '✓ 正常' : '⚠️ 无法使用') + note + '　' + kb + ' KB';
+                                if (valid) { okCount++; if (!firstOk) { firstOk = ch.name; rememberCloudChannel(ch.name); } }
+                            }
+                        }
+                    } else {
+                        // 免 Token 直链通道
+                        if (res.status === 404) {
+                            line = isGitee()
+                                ? '— 私有仓库这条通道读不到（正常，忽略即可）'
+                                : '— HTTP 404（该分支不存在，或私有仓库读不到，属正常现象）';
+                        } else if (!res.ok) {
+                            line = isGitee()
+                                ? '— Gitee 的 raw 直链被浏览器跨域限制挡住，属正常现象，忽略即可（数据走「Gitee API(大文件)」通道）'
+                                : '— HTTP ' + res.status;
+                        } else {
+                            let text = '';
+                            try { text = await withTimeout(res.text(), 20000, '内容读取超时'); } catch (e) { text = ''; }
                             let o = null;
                             try { o = JSON.parse(text); } catch (e) { o = null; }
                             const kb = Math.round(text.length / 1024 * 10) / 10;
-                            let valid = false, note = '';
                             if (o && (o.products || o.records)) {
-                                valid = true;
-                                note = '，已识别为有效数据（' + (o.updatedAt ? '云端时间戳 ' + o.updatedAt + '，' : '') +
-                                       Object.keys(o.products || {}).length + ' 个商品 / ' + (o.records || []).length + ' 条流水）';
-                            } else if (o && typeof o.content === 'string') {
-                                note = o.content
-                                    ? '（GitHub 的 base64 包装格式，程序会自动解开）'
-                                    : '（⚠️ 里面没有文件内容：云端数据超过 1MB 时 GitHub 就不给了 → 请用第 1 条「原始文件」通道）';
+                                okCount++; if (!firstOk) { firstOk = ch.name; rememberCloudChannel(ch.name); }
+                                line = '✓ 正常，已读到云端数据（' + kb + ' KB）';
                             } else {
-                                note = '（不是本应用的数据文件）';
+                                line = '⚠️ 返回的不是本应用的数据文件';
                             }
-                            line = (valid ? '✓ 正常' : '✗ 无法使用') + note + '　' + kb + ' KB';
-                            if (valid) { okCount++; if (!firstOk) { firstOk = ch.name; rememberCloudChannel(ch.name); } }
                         }
                     }
                 } catch (e) {
-                    line = '✗ ' + ((e && e.name === 'AbortError') ? '超时无响应' : (e.message || e));
+                    if (ch.kind === 'file' && isGitee()) {
+                        line = '— Gitee 的 raw 直链被浏览器跨域限制挡住（Failed to fetch），属正常现象，忽略即可';
+                    } else {
+                        line = '✗ ' + ((e && e.name === 'AbortError') ? '超时无响应' : (e.message || 'Failed to fetch'));
+                    }
                 }
                 lines.push(String(i + 1) + '. ' + ch.name + '：' + line + '　' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
                 put();
             }
 
             lines.push('');
-            if (okCount === 0) {
-                if (apiReachable) {
-                    lines.push('结论：官方 API 能连上 GitHub（返回 200），但没取到可用的数据。');
-                    lines.push('说明网络没问题，问题在云端那份文件。请点「⬇️ 从云端拉取」看具体报错，再把它发我。');
-                    setSyncStatus('⚠️ 网络正常，但云端没取到可用数据');
-                } else {
-                    lines.push('结论：全部通道都失败 → 手机当前网络访问不了 GitHub。');
-                    lines.push('请换一下网络（WiFi ⇄ 手机流量）后再测；换网络仍全失败，说明这个网络需要代理才能上 GitHub。');
-                    setSyncStatus('❌ 全部通道不通（手机网络访问不了 GitHub）');
-                }
-            } else {
+            if (okCount > 0) {
                 lines.push('结论：共 ' + okCount + ' 条通道可用，拉取时会自动使用「' + firstOk + '」。');
                 setSyncStatus('✅ 有 ' + okCount + ' 条通道可用：' + firstOk);
+            } else if (fileMissing && serverReached && !tokenProblem) {
+                lines.push('结论：网络是通的，令牌也对 —— 只是云端还没有数据文件（首次配置的正常状态）。');
+                lines.push('直接点「⬆️ 推送到云端」，把当前设备的数据传上去就能用了。');
+                setSyncStatus('✅ 连接正常，云端还没有数据，点「推送到云端」即可');
+            } else if (tokenProblem) {
+                lines.push('结论：网络是通的，但令牌被拒绝 —— 重新生成私人令牌（务必勾选 projects 权限），保存后重测。');
+                setSyncStatus('⚠️ 令牌被拒绝，请重新生成私人令牌');
+            } else if (serverReached) {
+                lines.push('结论：网络是通的，但没取到可用数据 —— 请点「⬇️ 从云端拉取」看具体报错，再把它发我。');
+                setSyncStatus('⚠️ 网络正常，但云端没取到可用数据');
+            } else {
+                lines.push('结论：所有通道都发不出请求 —— 当前网络访问不了 ' + platName + '。');
+                lines.push('请换一下网络（WiFi ⇄ 手机流量）后再测；仍全失败说明这个网络需要代理。');
+                setSyncStatus('⚠️ 所有通道不通（当前网络访问不了 ' + platName + '）');
             }
             lines.push('');
-            lines.push('※ 「raw 直链 / jsDelivr」只能读公开仓库；数据仓库设成私有时它们必然 404，属正常现象，');
-            lines.push('   以「GitHub API」那两条的结果为准即可。');
+            if (isGitee()) {
+                lines.push('※ Gitee 模式说明：raw 直链通道会被浏览器跨域限制挡住（✗ 属正常，忽略即可），');
+                lines.push('   数据实际走「Gitee API(大文件)」通道；那条显示 404 = 云端还没有数据文件，推送一次就有。');
+            } else {
+                lines.push('※ 「raw 直链 / jsDelivr」只能读公开仓库；数据仓库设成私有时它们必然 404，属正常现象，');
+                lines.push('   以「GitHub API」那两条的结果为准即可。');
+            }
             put();
             cloudDiagText = lines.join('\n');
         }
