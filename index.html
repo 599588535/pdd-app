@@ -1101,7 +1101,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-02 14:00';
+        const APP_BUILD = '2026-10-02 16:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1444,6 +1444,13 @@
         function authHeaders() {
             // Gitee 用 access_token 查询参数鉴权（已含在 URL 里），不走 Authorization 头
             return isGitee() ? {} : { Authorization: 'token ' + ghConfig.token };
+        }
+        // 仓库本身的信息接口：用来区分「数据文件还没传」和「仓库路径/令牌根本不对」
+        function repoInfoUrl() {
+            if (isGitee()) {
+                return `https://gitee.com/api/v5/repos/${ghConfig.user}/${ghConfig.repo}?access_token=${encodeURIComponent(ghConfig.token)}`;
+            }
+            return `https://api.github.com/repos/${ghConfig.user}/${ghConfig.repo}`;
         }
         function githubRawUrl(branch) {
             return `https://raw.githubusercontent.com/${ghConfig.user}/${ghConfig.repo}/${branch}/${FILE_NAME}?t=${Date.now()}`;
@@ -1828,9 +1835,12 @@
                 const putTimeout = sizeKb > 800 ? 150000 : (sizeKb > 300 ? 75000 : 30000);
                 const body = { message: '数据同步 ' + new Date().toLocaleString('zh-CN', { hour12: false }), content: utf8ToBase64(payload) };
                 if (sha) body.sha = sha;
-                if (isGitee()) body.access_token = ghConfig.token;   // Gitee 的 PUT 在 body 里带令牌
+                if (isGitee()) body.access_token = ghConfig.token;   // Gitee 的写入请求在 body 里带令牌
+                // ⚠️ Gitee 和 GitHub 不同：创建文件用 POST，更新文件才用 PUT（且必须带 sha）。
+                // 云端还没有数据文件时用 PUT 裸传，Gitee 会直接拒绝（HTTP 400）—— GitHub 则一个 PUT 通吃。
+                const httpMethod = sha ? 'PUT' : (isGitee() ? 'POST' : 'PUT');
                 const putRes = await fetchWithTimeout(url, {
-                    method: 'PUT',
+                    method: httpMethod,
                     headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
                     body: JSON.stringify(body)
                 }, putTimeout);
@@ -1862,8 +1872,19 @@
                 lastSyncError = 'HTTP ' + putRes.status + (errData.message ? '：' + errData.message : '');
                 if (!silent) {
                     let hint = '';
-                    if (putRes.status === 404) hint = '\n\n请检查：\n- Token 是否已授权该仓库\n- 用户名/仓库名是否拼写正确';
-                    if (putRes.status === 403 || putRes.status === 401) hint = '\n\n请检查：\n- Token 是否有 Contents 读写权限\n- Token 是否已过期';
+                    if (putRes.status === 404) {
+                        hint = isGitee()
+                            ? '\n\nGitee 上找不到这个仓库，请检查：\n- 仓库是否已创建（新建仓库 → 名称与「仓库名称」一致 → 选私有）\n- 浏览器打开 gitee.com/你的用户名/仓库名 能否打开，用户名就是地址栏里那串\n- 令牌必须是用这同一个 Gitee 账号生成的'
+                            : '\n\n请检查：\n- Token 是否已授权该仓库\n- 用户名/仓库名是否拼写正确';
+                    }
+                    if (putRes.status === 400 && isGitee()) {
+                        hint = '\n\nGitee 拒绝了这次写入（400）：请把软件更新到最新版本后重试（旧版本对 Gitee 的「新建文件」接口用法不对）';
+                    }
+                    if (putRes.status === 403 || putRes.status === 401) {
+                        hint = isGitee()
+                            ? '\n\n请检查：\n- 重新生成私人令牌，权限务必勾选「projects」\n- 令牌复制是否完整（提交后只显示一次）\n- 令牌是否已过期/被删除'
+                            : '\n\n请检查：\n- Token 是否有 Contents 读写权限\n- Token 是否已过期';
+                    }
                     alert('推送失败:\nHTTP ' + putRes.status + ': ' + (errData.message || '') + hint);
                 }
                 return false;
@@ -2118,10 +2139,21 @@
                     // 「API 类」通道只要服务器回了 HTTP 状态码，就证明网络是通的
                     if (ch.kind === 'api' || ch.kind === 'gblob') serverReached = true;
                     if (ch.kind === 'gblob') {
-                        // Gitee 大文件通道：404 = 仓库里还没有数据文件（首次配置的正常状态）
+                        // Gitee 大文件通道：404 有两种可能 —— 「还没有数据文件（正常）」或「仓库路径/令牌不对」。
+                        // 再问一下仓库本身存在不存在，就能给出确定结论，不让用户猜。
                         if (res.status === 404) {
-                            fileMissing = true;
-                            line = '✓ 网络通、令牌有效 —— 云端还没有数据文件（正常，点一次「⬆️ 推送到云端」就有了）';
+                            let repoOk = false;
+                            try {
+                                const rr = await fetchWithTimeout(repoInfoUrl(), { cache: 'no-store' }, 12000);
+                                repoOk = rr.ok;
+                            } catch (e) { repoOk = false; }
+                            serverReached = true;
+                            if (repoOk) {
+                                fileMissing = true;
+                                line = '✓ 网络通、仓库也找到了 —— 云端还没有数据文件（正常，点一次「⬆️ 推送到云端」就有了）';
+                            } else {
+                                line = '✗ 网络通，但 Gitee 上找不到 ' + ghConfig.user + '/' + ghConfig.repo + ' 这个仓库：\n   ① 仓库是否已创建（新建时选「私有」）\n   ② 用户名必须是仓库地址栏 gitee.com/ 后面那串\n   ③ 令牌必须是用这个 Gitee 账号生成的';
+                            }
                         } else if (res.status === 401 || res.status === 403) {
                             tokenProblem = true;
                             line = '✗ HTTP ' + res.status + '（令牌无效，或生成时没勾 projects 权限）';
@@ -2373,8 +2405,10 @@
                 const body = { message: 'auto sync on exit', content: utf8ToBase64(payload) };
                 if (cachedSha) body.sha = cachedSha;
                 if (isGitee()) body.access_token = ghConfig.token;
+                // 文件还不存在时 Gitee 必须用 POST 创建（同 uploadData 的规则）
+                const exitMethod = (isGitee() && !cachedSha) ? 'POST' : 'PUT';
                 fetch(dataApiUrl(), {
-                    method: 'PUT',
+                    method: exitMethod,
                     keepalive: true,
                     headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
                     body: JSON.stringify(body)
