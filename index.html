@@ -1101,7 +1101,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-02 12:00';
+        const APP_BUILD = '2026-10-02 13:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1496,23 +1496,33 @@
 
         // 带超时的请求：手机弱网下请求会长时间挂住，必须能主动放弃
         async function fetchWithTimeout(url, opt, ms) {
+            const limit = ms || 12000;
             let ctrl = null;
             try { ctrl = new AbortController(); } catch (e) { ctrl = null; }
-            let timer = null;
-            if (ctrl) timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, ms || 12000);
-            const o = Object.assign({}, opt || {});
-            if (ctrl) o.signal = ctrl.signal;
-            try {
-                return await fetch(url, o);
-            } finally {
-                if (timer) clearTimeout(timer);
+            if (ctrl) {
+                let timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, limit);
+                const o = Object.assign({}, opt || {});
+                o.signal = ctrl.signal;
+                try { return await fetch(url, o); }
+                finally { clearTimeout(timer); }
             }
+            // 老内核没有 AbortController：退化为「竞速」——调用方最多等 limit 毫秒，
+            // 不会再被一个挂死的请求永远卡住（请求本体可能还在后台，但已无关紧要）
+            let timer2 = null;
+            try {
+                return await Promise.race([
+                    fetch(url, opt || {}),
+                    new Promise((_, rej) => { timer2 = setTimeout(() => rej(new Error('请求超时')), limit); })
+                ]);
+            } finally { if (timer2) clearTimeout(timer2); }
         }
 
         // 安全地读 JSON：响应体为空时给出人话提示（这正是手机上报 "Unexpected EOF" 的真相）
+        // ⚠️ 读内容必须也带超时：请求超时只管到「响应头到达」，头到了内容却一直传不完时
+        // （手机弱网被限速的典型表现），不兜底就会永远挂在「正在检查云端...」
         async function readJsonSafe(res, tag) {
             let text = '';
-            try { text = await res.text(); }
+            try { text = await withTimeout(res.text(), 20000, '内容读取超时'); }
             catch (e) { throw new Error(tag + '：读取内容失败（' + (e.message || e) + '）'); }
             if (!text || !text.trim()) {
                 throw new Error(tag + '：返回了空内容（HTTP ' + res.status + '，手机网络被拦截的典型表现）');
@@ -1831,7 +1841,7 @@
                     // ① 退出页面时的抢发要用它（首选通道拿不到 sha，只能靠这里缓存）
                     // ② 记进 lastCloudSha，自己推完就不会再把自己拉回来一遍
                     try {
-                        const putData = await putRes.json();
+                        const putData = await withTimeout(putRes.json(), 15000, '回执读取超时');
                         const newSha = putData && putData.content && putData.content.sha;
                         if (newSha) {
                             cachedSha = newSha;
@@ -1985,7 +1995,11 @@
 
         async function initialSync() {
             if (!syncConfigured()) { setSyncStatus('未开启同步：填写上方配置并保存后自动开启'); return; }
-            if (syncBusy) return;
+            if (syncBusy) {
+                // 上一次检查还没跑完（弱网下每条通道最长 12 秒），别悄悄吞掉这次调用，把状态说清楚
+                setSyncStatus('上一次云端检查还在进行，请稍等几秒…');
+                return;
+            }
             syncBusy = true;
             setSyncStatus('正在检查云端...');
             try {
@@ -1995,7 +2009,11 @@
                     // 示例数据 / 空数据绝不推 —— 不然本机存储出问题时会把云端唯一的好数据抹掉。
                     const hasReal = !appData.isSeed &&
                         (appData.records.length > 0 || Object.keys(appData.products).length > 0);
-                    if (hasReal) { if (!(await uploadData(true))) schedulePushRetry(); }
+                    if (hasReal) {
+                        // 首次上传是全量数据（带图片可达几 MB），手机网络慢时要传一两分钟，必须明说，别让用户以为卡死
+                        setSyncStatus('云端还没有数据，正在首次上传全部数据（数据大时要等一两分钟）...');
+                        if (!(await uploadData(true))) schedulePushRetry();
+                    }
                     else setSyncStatus('云端暂无数据，本机有修改后将自动上传');
                 } else if (appData.isSeed) {
                     adoptCloud(cloud);
