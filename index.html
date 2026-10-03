@@ -1101,7 +1101,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-02 16:00';
+        const APP_BUILD = '2026-10-03 10:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1809,6 +1809,49 @@
             }
         }
 
+        // 推送前的合并：把云端有、本机没有的记录（流水/采购单/拒收件）按 id 并进本机。
+        // 返回合并进来的条数。目的只有一个：任何一次推送都不可能把另一台设备
+        // 刚录的内容整包抹掉 —— 记录只增不丢，删除类操作以最新一台设备为准。
+        function mergeCloudRecords(cloud) {
+            if (!cloud) return 0;
+            let added = 0;
+            const have = {};
+            (appData.records || []).forEach(r => { if (r && r.id != null) have['r' + String(r.id)] = true; });
+            if (!Array.isArray(appData.records)) appData.records = [];
+            (cloud.records || []).forEach(r => {
+                if (r && r.id != null && !have['r' + String(r.id)]) {
+                    appData.records.unshift(r);
+                    have['r' + String(r.id)] = true;
+                    added++;
+                }
+            });
+            if (!Array.isArray(appData.purchases)) appData.purchases = [];
+            const hp = {};
+            appData.purchases.forEach(p => { if (p && p.id != null) hp['p' + String(p.id)] = true; });
+            (cloud.purchases || []).forEach(p => {
+                if (p && p.id != null && !hp['p' + String(p.id)]) {
+                    appData.purchases.unshift(p);
+                    hp['p' + String(p.id)] = true;
+                    added++;
+                }
+            });
+            if (!Array.isArray(appData.rejects)) appData.rejects = [];
+            const hr = {};
+            (appData.rejects || []).forEach(r => { if (r && r.id != null) hr['j' + String(r.id)] = true; });
+            (cloud.rejects || []).forEach(r => {
+                if (r && r.id != null && !hr['j' + String(r.id)]) {
+                    appData.rejects.unshift(r);
+                    hr['j' + String(r.id)] = true;
+                    added++;
+                }
+            });
+            // 商品与库存状态：云端整体比本机新时（多半带着本机没有的新流水），采纳云端的商品表
+            if (added > 0 && cloud.updatedAt && appData.updatedAt && Number(cloud.updatedAt) > Number(appData.updatedAt) && cloud.products) {
+                appData.products = cloud.products;
+            }
+            return added;
+        }
+
         async function uploadData(silent) {
             const url = dataApiUrl();
             let sha = cachedSha === null ? '' : cachedSha;
@@ -1826,6 +1869,26 @@
                 lastSyncError = '读取云端文件信息失败：' + (e.message || e);
                 if (!silent) alert('网络错误: ' + e.message);
                 return false;
+            }
+            // ⚠️ 推送前的内容保险（防「顶掉」的最后一道闸）：
+            // 云端指纹和我们上次推的不一样 = 另一台设备刚推过。此时必须先把云端拉下来，
+            // 把云端有、本机没有的记录合并进本机再推 —— 保证任何一次推送都是
+            // 「在云端基础上补写」，绝不可能整包覆盖掉另一台设备刚录的内容。
+            // （仅靠时间戳判断挡不住：本机哪怕被自动清理之类的小改动碰一下，
+            //   时间戳就会变成今天，时间比对会误判「本机更新」而放行覆盖。）
+            if (sha && sha !== lastCloudSha) {
+                try {
+                    const cloudNow = await fetchCloud();
+                    if (cloudNow && !cloudNow.notFound) {
+                        const added = mergeCloudRecords(cloudNow);
+                        if (added > 0) {
+                            appData.updatedAt = Date.now();
+                            appData.isSeed = false;
+                            saveData();
+                            if (!silent) showToast('已合并另一台设备的 ' + added + ' 条记录后上传');
+                        }
+                    }
+                } catch (e) { /* 云端拉不到就按原样推，绝不因合并失败中断上传 */ }
             }
             let sizeKb = 0;
             try {
