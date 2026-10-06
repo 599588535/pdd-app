@@ -1101,7 +1101,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-03 10:00';
+        const APP_BUILD = '2026-10-06 18:30';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1809,6 +1809,26 @@
             }
         }
 
+        // 本机有多少条「云端没有」的业务记录（流水/采购单/拒收件，按 id 比对）。
+        // 这是判断「本机改动是不是真改动」的唯一可靠依据 —— 绝不能看 updatedAt 时钟：
+        // 打开页面时的自动清理（0库存满7天）等后台动作会把本机时间戳刷新成"现在"，
+        // 时钟一比就误判「本机更新」，拿旧数据把手机刚推的新数据顶掉。
+        // 返回 0 = 本机没有任何云端缺少的记录，所谓"未推送改动"只是后台动作碰了时间戳。
+        function countLocalOnlyRecords(cloud) {
+            if (!cloud) return 0;
+            let n = 0;
+            const cR = {};
+            (cloud.records || []).forEach(r => { if (r && r.id != null) cR['r' + String(r.id)] = true; });
+            (appData.records || []).forEach(r => { if (r && r.id != null && !cR['r' + String(r.id)]) n++; });
+            const cP = {};
+            (cloud.purchases || []).forEach(p => { if (p && p.id != null) cP['p' + String(p.id)] = true; });
+            (appData.purchases || []).forEach(p => { if (p && p.id != null && !cP['p' + String(p.id)]) n++; });
+            const cJ = {};
+            (cloud.rejects || []).forEach(r => { if (r && r.id != null) cJ['j' + String(r.id)] = true; });
+            (appData.rejects || []).forEach(r => { if (r && r.id != null && !cJ['j' + String(r.id)]) n++; });
+            return n;
+        }
+
         // 推送前的合并：把云端有、本机没有的记录（流水/采购单/拒收件）按 id 并进本机。
         // 返回合并进来的条数。目的只有一个：任何一次推送都不可能把另一台设备
         // 刚录的内容整包抹掉 —— 记录只增不丢，删除类操作以最新一台设备为准。
@@ -1845,9 +1865,17 @@
                     added++;
                 }
             });
-            // 商品与库存状态：云端整体比本机新时（多半带着本机没有的新流水），采纳云端的商品表
-            if (added > 0 && cloud.updatedAt && appData.updatedAt && Number(cloud.updatedAt) > Number(appData.updatedAt) && cloud.products) {
-                appData.products = cloud.products;
+            // 商品与库存状态：只要云端带着本机没有的新流水，云端的商品表就一定比本机的准
+            // （本机这份没经历过那些流水，库存数字是旧的）。这里绝不能再看两边时钟 ——
+            // 本机时间戳一旦被自动清理等后台动作刷新成"现在"，时钟比对就会拒绝采纳云端、
+            // 放行本机旧商品表推上去，把手机端的最新库存顶回去。
+            // 本机独有的商品（云端没有的 key）保留，其余以云端为准。
+            if (added > 0 && cloud.products) {
+                const localOnlyProducts = {};
+                Object.keys(appData.products || {}).forEach(k => {
+                    if (!(k in cloud.products)) localOnlyProducts[k] = appData.products[k];
+                });
+                appData.products = Object.assign({}, cloud.products, localOnlyProducts);
             }
             return added;
         }
@@ -1920,6 +1948,11 @@
                             cachedSha = newSha;
                             lastCloudSha = newSha;
                             localStorage.setItem('pddLastSha', newSha);
+                        } else {
+                            // 回执里没带到新指纹 → 补一次轻量探测，保证 pddLastSha 始终是
+                            // 「我最后推上去的那份」的指纹，定时轮询才不会误判云端变了
+                            const s2 = await probeCloudSha();
+                            if (s2) { cachedSha = s2; lastCloudSha = s2; localStorage.setItem('pddLastSha', s2); }
                         }
                     } catch (e) {}
                     // 标记「这份数据已与云端一致」：既写小键值，也写进数据本体（appData._syncedAt，
@@ -2074,6 +2107,19 @@
             lastCloudUpdatedAt = appData.updatedAt; // 已与云端一致，不再回推
             appData._syncedAt = appData.updatedAt;
             try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
+            // 把刚接收的云端指纹也持久化：定时轮询靠 pddLastSha 判断「云端有没有被别人改过」。
+            // 不写的话接收完下一轮轮询会误判云端又变了，反复全量下载（费流量）。
+            // 本次拉取走的通道拿不到指纹（raw 直链）时，补一次轻量探测拿回来。
+            try {
+                if (cachedSha) {
+                    localStorage.setItem('pddLastSha', cachedSha);
+                    lastCloudSha = cachedSha;
+                } else {
+                    probeCloudSha().then(s => {
+                        if (s) { try { localStorage.setItem('pddLastSha', s); } catch (e) {} lastCloudSha = s; }
+                    });
+                }
+            } catch (e) {}
             checkConflictBackup();   // 覆盖前留了备份 → 管理页亮出导出按钮
         }
 
@@ -2104,17 +2150,27 @@
                     renderAllLists();
                     showToast('已自动同步云端最新数据');
                 } else if (hasLocalChanges()) {
-                    // 本机有「改过还没推上去」的改动 —— 但先看一眼云端时间再动手：
-                    // 另一台设备（比如手机）可能刚推了更新的数据上去，这时候绝不能拿本机旧的盖上去，
-                    // 否则就是「手机新录的数据被电脑旧数据顶掉」。
-                    // 只有本机数据确实不比云端旧时才推；云端更新时改为接收云端，
-                    // 本机这份（含没推上去的改动）会自动留一份冲突备份，管理页可导出。
-                    if (cloud.updatedAt && appData.updatedAt && Number(cloud.updatedAt) > Number(appData.updatedAt)) {
+                    // 本机有「改过还没推上去」的改动 —— 但先搞清楚云端在我们上次同步后
+                    // 有没有被另一台设备更新过（比如手机刚推了新数据上来）。
+                    // ⚠️ 绝不能靠比较两台设备的 updatedAt 时钟判断谁新 —— 打开页面时的
+                    // 自动清理（0库存满7天）等后台动作会先把本机时间戳刷新成"现在"，
+                    // 时钟一比就误判「本机更新」而放行推送，正是「手机新录的数据被电脑
+                    // 旧数据顶掉」的根因。判据改用业务记录本身：本机有没有云端缺少的记录。
+                    let syncedStamp = '';
+                    try { syncedStamp = String(appData._syncedAt != null ? appData._syncedAt : (localStorage.getItem('pddLastSyncAt') || '')); } catch (e) {}
+                    const cloudMoved = String(cloud.updatedAt || '') !== syncedStamp;
+                    if (cloudMoved && countLocalOnlyRecords(cloud) === 0) {
+                        // 云端已被另一台设备更新，而本机没有任何云端缺少的业务记录
+                        // （所谓"未推送的改动"只是自动清理/时间戳被刷新）→ 直接接收云端，
+                        // 本机这份自动留冲突备份，管理页可导出。
                         adoptCloud(cloud);
                         renderAllLists();
                         checkConflictBackup();
                         showToast('云端有更新的数据，已接收（本机改动已自动备份）');
                     } else {
+                        // 云端没动过，或本机确有云端缺少的记录 → 推送本机改动。
+                        // uploadData 内部还有一道合并保险：推之前发现云端指纹变了，
+                        // 会先把云端的记录与商品并进来再推，绝不会整包顶掉对方数据。
                         setSyncStatus('本机有未同步的改动，正在上传...');
                         const pushed = await uploadData(true);
                         if (!pushed) {
@@ -2397,20 +2453,32 @@
             //    这个轮询同时兼作「推送失败自动重试」，保证手机上的改动最终一定能到电脑端。
             if (hasLocalChanges()) {
                 const sha0 = await probeCloudSha();
-                if (sha0 && sha0 !== lastCloudSha) {
+                // ⚠️ 必须跟「持久化」的云端指纹 pddLastSha（上次推送/接收成功时写入）比，
+                // 不能跟内存里的 lastCloudSha 比 —— 页面一刷新它就是 null，每次轮询都会
+                // 误判「云端变了」，再配合时钟比对就会拿本机旧数据顶掉手机刚推的新数据。
+                let lastSha = '';
+                try { lastSha = localStorage.getItem('pddLastSha') || ''; } catch (e) {}
+                if (sha0 && sha0 !== lastSha) {
                     syncBusy = true;
                     let newer = null;
                     try { newer = await fetchCloud(); } catch (e) { newer = null; } finally { syncBusy = false; }
-                    if (newer && !newer.notFound && newer.updatedAt && appData.updatedAt &&
-                        Number(newer.updatedAt) > Number(appData.updatedAt)) {
-                        lastCloudSha = sha0;
-                        adoptCloud(newer);
-                        renderAllLists();
-                        checkConflictBackup();
-                        showToast('云端有更新的数据，已接收（本机改动已自动备份）');
-                        return;
+                    if (newer && !newer.notFound && String(newer.updatedAt) !== String(appData.updatedAt)) {
+                        if (countLocalOnlyRecords(newer) === 0) {
+                            // 云端被另一台设备更新过，本机没有云端缺少的记录 → 接收云端，
+                            // 绝不拿本机旧的盖上去（不看时钟，只看业务记录）。
+                            lastCloudSha = sha0;
+                            adoptCloud(newer);
+                            renderAllLists();
+                            checkConflictBackup();
+                            showToast('云端有更新的数据，已接收（本机改动已自动备份）');
+                            return;
+                        }
+                        // 本机确有云端缺少的记录：先把云端的记录与商品并进来，再往下推
+                        mergeCloudRecords(newer);
+                        appData.updatedAt = Date.now();
+                        saveData();
                     }
-                    // 云端不比本机新（或没比出来）→ 按原逻辑继续推送本机改动
+                    // 云端没变（或内容与本机一致）→ 按原逻辑继续推送本机改动
                 }
                 syncBusy = true;
                 let pushed = false;
