@@ -197,6 +197,12 @@
         .mini-stat { background: #fafafa; border: 1px solid #f0f0f0; border-radius: var(--radius); padding: 10px 2px; text-align: center; }
         .mini-stat .v { display: block; font-size: 1.05rem; font-weight: bold; color: var(--text-main); }
         .mini-stat .l { font-size: 0.68rem; color: #999; }
+        /* 今日速览格子可点开看明细 */
+        .mini-stat.clickable { cursor: pointer; transition: all 0.15s; }
+        .mini-stat.clickable:hover { background: rgba(224,46,36,0.05); border-color: rgba(224,46,36,0.25); }
+        .mini-stat.clickable .l::after { content: ' ›'; color: #ccc; }
+        .today-detail-list { max-height: 52vh; overflow-y: auto; margin-top: 6px; }
+        .today-detail-sum { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; color: #666; line-height: 1.6; margin-top: 10px; }
 
         .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
         .bar-label { width: 88px; flex-shrink: 0; font-size: 0.78rem; color: #555; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: right; }
@@ -433,7 +439,7 @@
     <main style="margin-top: 15px;" data-page-node-id="qqr8rj7hk1EhRLlun855pI">
         <div id="page-home" class="page active" data-page-node-id="jEtiuPGY12noqQIctdjuk6">
             <div class="card span-2" data-page-node-id="todayCard01">
-                <div class="card-header" style="font-size: 1rem;" data-page-node-id="todayCard02">☀️ 今日速览 <span style="font-size:0.72rem; color:#999; font-weight:normal;" data-page-node-id="todayCard04">（只看今天，随时间自动更新）</span></div>
+                <div class="card-header" style="font-size: 1rem;" data-page-node-id="todayCard02">☀️ 今日速览 <span style="font-size:0.72rem; color:#999; font-weight:normal;" data-page-node-id="todayCard04">（只看今天，点任意格子看明细）</span></div>
                 <div id="todayBox" class="today-grid" data-page-node-id="todayCard03"></div>
             </div>
 
@@ -987,6 +993,18 @@
         </div>
     </main>
 
+    <!-- 今日速览明细弹窗：点今日速览任意格子弹出，列出该指标对应的今日单子 -->
+    <div id="todayDetailModal" class="modal-overlay" data-page-node-id="todayDetailModal01">
+        <div class="modal" style="max-width: 460px;" data-page-node-id="todayDetailModal02">
+            <h3 id="todayDetailTitle" data-page-node-id="todayDetailModal03">今日明细</h3>
+            <div class="today-detail-list" id="todayDetailList" data-page-node-id="todayDetailModal04"></div>
+            <div class="today-detail-sum" id="todayDetailSum" data-page-node-id="todayDetailModal05"></div>
+            <div class="modal-actions" data-page-node-id="todayDetailModal06">
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeTodayDetail()" data-page-node-id="todayDetailModal07">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <div id="editModal" class="modal-overlay" data-page-node-id="TdI4FQn2sMazhmofHSjc4h">
         <div class="modal" data-page-node-id="sm0YUl0o3fsbeSJ56cA5Y8">
             <h3 data-page-node-id="MCLp3vhDF8pBhSOnViZP5d">修改记录</h3>
@@ -1101,7 +1119,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-06 18:30';
+        const APP_BUILD = '2026-10-07 20:30';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -2431,7 +2449,7 @@
         }
 
         function anyModalOpen() {
-            const ids = ['editModal', 'scanModal'];
+            const ids = ['editModal', 'scanModal', 'todayDetailModal'];
             for (let i = 0; i < ids.length; i++) {
                 const el = document.getElementById(ids[i]);
                 if (el && el.style.display && el.style.display !== 'none') return true;
@@ -4944,20 +4962,142 @@ function findByTracking(rawInput, allowFuzzy) {
                 }
             });
             const money = v => '¥' + Number(v || 0).toFixed(2);
+            // k = 点格子后要看的明细类型（showTodayDetail 按它过滤今日单子）
             const items = [
-                { l: '今日出单', v: fmtQty(qtySold) + ' 件' },
-                { l: '今日销售利润', v: money(profit), alert: profit < 0 },
-                { l: '今日销售额', v: orderCount || retCnt ? money(sales) : '—' },
-                { l: '出单记录', v: (orderCount || 0) + ' 条' },
-                { l: '今日入库', v: inCnt ? (inCnt + ' 笔') : '—' },
-                { l: '入库金额', v: inCnt ? money(inAmt) : '—' },
-                { l: '今日退货', v: retCnt ? (retCnt + ' 笔') : '—' },
-                { l: '今日支出', v: (shipExp + otherExp) ? money(shipExp + otherExp) : '—' }
+                { l: '今日出单', v: fmtQty(qtySold) + ' 件', k: 'out' },
+                { l: '今日销售利润', v: money(profit), alert: profit < 0, k: 'sale' },
+                { l: '今日销售额', v: orderCount || retCnt ? money(sales) : '—', k: 'sale' },
+                { l: '出单记录', v: (orderCount || 0) + ' 条', k: 'out' },
+                { l: '今日入库', v: inCnt ? (inCnt + ' 笔') : '—', k: 'in' },
+                { l: '入库金额', v: inCnt ? money(inAmt) : '—', k: 'in' },
+                { l: '今日退货', v: retCnt ? (retCnt + ' 笔') : '—', k: 'return' },
+                { l: '今日支出', v: (shipExp + otherExp) ? money(shipExp + otherExp) : '—', k: 'exp' }
             ];
             box.innerHTML = items.map(it =>
-                '<div class="mini-stat"' + (it.alert ? ' style="background:#fff5f5; border-color:#f7c1c1;"' : '') + '>' +
+                '<div class="mini-stat clickable" onclick="showTodayDetail(\'' + it.k + '\')"' + (it.alert ? ' style="background:#fff5f5; border-color:#f7c1c1;"' : '') + '>' +
                 '<span class="v">' + it.v + '</span><span class="l">' + it.l + '</span></div>').join('')
                 + (orderCount ? '' : '<div class="today-note">今天还没有出单记录</div>');
+        }
+
+        /* ==================== 今日速览 → 点格子看明细 ==================== */
+        // 每个格子对应看哪几类单子：出单格看出单；销售额/利润格看出单+退货（这两格数字就是它们一起算出来的）；
+        // 入库格看入库；退货格看退货；支出格看运费+其他支出
+        let todayDetailKind = '';
+        const TODAY_DETAIL_DEFS = {
+            out:    { title: '🛒 今日出单明细', types: ['out'] },
+            sale:   { title: '💰 今日销售明细（出单 + 退货）', types: ['out', 'return'] },
+            in:     { title: '📦 今日入库明细', types: ['in'] },
+            return: { title: '🔄 今日退货明细', types: ['return'] },
+            exp:    { title: '💸 今日支出明细（运费 + 其他支出）', types: ['ship', 'expense'] }
+        };
+
+        function todayRecordsOf(types) {
+            const start = todayStartTs();
+            return (appData.records || []).filter(r => {
+                const t = new Date(r.timestamp).getTime();
+                return !isNaN(t) && t >= start && types.indexOf(r.type) >= 0;
+            }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }
+
+        function showTodayDetail(kind) {
+            if (!TODAY_DETAIL_DEFS[kind]) return;
+            todayDetailKind = kind;
+            renderTodayDetail();
+            document.getElementById('todayDetailModal').style.display = 'flex';
+        }
+        function closeTodayDetail() {
+            todayDetailKind = '';
+            document.getElementById('todayDetailModal').style.display = 'none';
+        }
+        // 明细里的「改」：先关明细弹窗再开编辑弹窗，避免两层弹窗叠着
+        function todayDetailEdit(id) { closeTodayDetail(); openEditModal(id); }
+        // 明细里的「删」：删完原地刷新明细列表（用户取消确认也没关系，刷新无副作用）
+        function todayDetailDel(id) { deleteRecord(id); if (todayDetailKind) renderTodayDetail(); }
+
+        function renderTodayDetail() {
+            const def = TODAY_DETAIL_DEFS[todayDetailKind];
+            if (!def) return;
+            document.getElementById('todayDetailTitle').innerText = def.title;
+            const listEl = document.getElementById('todayDetailList');
+            const sumEl = document.getElementById('todayDetailSum');
+            const list = todayRecordsOf(def.types);
+
+            if (!list.length) {
+                listEl.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">今天还没有相关记录</div>';
+                sumEl.style.display = 'none';
+                return;
+            }
+            sumEl.style.display = '';
+
+            // 行样式与首页流水列表保持一致
+            let html = '';
+            list.forEach(item => {
+                let subText = '', moneySign = '', title = item.name;
+                if (item.type === 'in') {
+                    subText = `入库 ${item.qty}件 @ ¥${Number(item.cost || 0).toFixed(2)}`;
+                    moneySign = `<span style="color:#2196f3; font-weight:bold;">-¥${((item.cost || 0) * (item.qty || 0)).toFixed(2)}</span>`;
+                } else if (item.type === 'out') {
+                    subText = `出单 ${item.qty}件 @ ¥${item.price}`;
+                    if (item.saleType === 'split') subText += ` (拆分${item.splitQty}件)`;
+                    moneySign = `<span style="color:var(--success); font-weight:bold;">+¥${Number(item.profit || 0).toFixed(2)}</span>`;
+                } else if (item.type === 'return') {
+                    subText = `退货 ${item.qty}件`;
+                    moneySign = `<span style="color:var(--warning); font-weight:bold;">-¥${Number(item.totalReturn != null ? item.totalReturn : 0).toFixed(2)}</span>`;
+                } else if (item.type === 'ship') {
+                    title = '运费支出';
+                    subText = item.name || '运费';
+                    moneySign = `-¥${Number(item.qty || 0).toFixed(2)}`;
+                } else if (item.type === 'expense') {
+                    title = item.category || '其他支出';
+                    subText = item.note || item.name;
+                    moneySign = `<span style="color:var(--purple); font-weight:bold;">-¥${Number(item.qty || 0).toFixed(2)}</span>`;
+                }
+                const dateStr = new Date(item.timestamp).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                html += `
+                <div class="record-item type-${item.type}">
+                    <div class="record-info">
+                        <h4>${esc(title)}</h4>
+                        <p>${esc(subText)} <span style="float:right; color:#999;">${dateStr}</span></p>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:bold; font-size:0.9rem;">${moneySign}</span>
+                        <div class="record-actions" style="justify-content: flex-end; margin-top:5px;">
+                            <a href="javascript:void(0)" class="action-link" onclick="todayDetailEdit('${item.id}')">改</a>
+                            <a href="javascript:void(0)" class="action-link delete" onclick="todayDetailDel('${item.id}')">删</a>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            listEl.innerHTML = html;
+
+            // 底部合计：口径与今日速览格子完全一致，方便对账
+            const m2 = v => '¥' + Number(v || 0).toFixed(2);
+            let sum = '';
+            if (todayDetailKind === 'out') {
+                let qty = 0, sales = 0, profit = 0;
+                list.forEach(r => { qty += r.qty || 0; sales += (r.price || 0) * (r.qty || 0) - (r.fee || 0); profit += (r.price || 0) * (r.qty || 0) - (r.cost || 0) * (r.qty || 0) - (r.fee || 0); });
+                sum = `共 ${list.length} 条 ｜ 卖出 ${fmtQty(qty)} 件 ｜ 货款 ${m2(sales)} ｜ 利润 ${m2(profit)}`;
+            } else if (todayDetailKind === 'sale') {
+                let qty = 0, sales = 0, profit = 0, retCnt = 0, retAmt = 0, outCnt = 0;
+                list.forEach(r => {
+                    if (r.type === 'out') { outCnt++; qty += r.qty || 0; sales += (r.price || 0) * (r.qty || 0) - (r.fee || 0); profit += (r.price || 0) * (r.qty || 0) - (r.cost || 0) * (r.qty || 0) - (r.fee || 0); }
+                    else { retCnt++; retAmt += (r.totalReturn != null ? r.totalReturn : (r.price || 0) * (r.qty || 0)); sales -= (r.price || 0) * (r.qty || 0); profit -= ((r.price || 0) - returnUnitCost(r)) * (r.qty || 0); }
+                });
+                sum = `出单 ${outCnt} 条（${fmtQty(qty)} 件）｜ 退货 ${retCnt} 笔（${m2(retAmt)}）<br>销售额 ${m2(sales)} ｜ 销售利润 ${m2(profit)}`;
+            } else if (todayDetailKind === 'in') {
+                let qty = 0, amt = 0;
+                list.forEach(r => { qty += r.qty || 0; amt += (r.cost || 0) * (r.qty || 0); });
+                sum = `共 ${list.length} 笔 ｜ 入库 ${fmtQty(qty)} 件 ｜ 入库金额 ${m2(amt)}`;
+            } else if (todayDetailKind === 'return') {
+                let amt = 0;
+                list.forEach(r => { amt += (r.totalReturn != null ? r.totalReturn : (r.price || 0) * (r.qty || 0)); });
+                sum = `共 ${list.length} 笔 ｜ 退货金额 ${m2(amt)}`;
+            } else if (todayDetailKind === 'exp') {
+                let ship = 0, other = 0;
+                list.forEach(r => { if (r.type === 'ship') ship += r.qty || 0; else other += r.qty || 0; });
+                sum = `共 ${list.length} 条 ｜ 运费 ${m2(ship)} ｜ 其他支出 ${m2(other)} ｜ 合计 ${m2(ship + other)}`;
+            }
+            sumEl.innerHTML = sum;
         }
 
         /* ==================== 每月利润对比 ==================== */
