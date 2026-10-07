@@ -1119,7 +1119,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-07 20:30';
+        const APP_BUILD = '2026-10-07 21:40';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1867,9 +1867,24 @@
             const hp = {};
             appData.purchases.forEach(p => { if (p && p.id != null) hp['p' + String(p.id)] = true; });
             (cloud.purchases || []).forEach(p => {
-                if (p && p.id != null && !hp['p' + String(p.id)]) {
+                if (!p || p.id == null) return;
+                const pk = 'p' + String(p.id);
+                if (!hp[pk]) {
                     appData.purchases.unshift(p);
-                    hp['p' + String(p.id)] = true;
+                    hp[pk] = true;
+                    added++;
+                    return;
+                }
+                // ⚠️ 同一张采购单两边都有时，绝不能无脑留本机这份：
+                // 「待收货 → 已收货 → 已入库」是单向推进的状态，哪边走得更远就听哪边的。
+                // 否则另一台设备刚点的「入库」（stocked=true）会被本机旧的「待入库」
+                // （stocked=false）顶回去 —— 历史流水里已有入库记录、待入库里订单却又
+                // 冒出来，再勾一次就重复入库、库存和统计翻倍（用户实测踩到的 bug）。
+                const lp = appData.purchases.find(x => x && String(x.id) === String(p.id));
+                if (!lp) return;
+                const rank = x => (x && x.stocked) ? 2 : ((x && x.arrived) ? 1 : 0);
+                if (rank(p) > rank(lp)) {
+                    appData.purchases[appData.purchases.indexOf(lp)] = p;
                     added++;
                 }
             });
@@ -1877,9 +1892,19 @@
             const hr = {};
             (appData.rejects || []).forEach(r => { if (r && r.id != null) hr['j' + String(r.id)] = true; });
             (cloud.rejects || []).forEach(r => {
-                if (r && r.id != null && !hr['j' + String(r.id)]) {
+                if (!r || r.id == null) return;
+                const jk = 'j' + String(r.id);
+                if (!hr[jk]) {
                     appData.rejects.unshift(r);
-                    hr['j' + String(r.id)] = true;
+                    hr[jk] = true;
+                    added++;
+                    return;
+                }
+                // 拒收件的「已收到回存」同样是单向状态：哪边完成了听哪边的，
+                // 否则会出现「已回存的拒收件又变回退回中」，再点一次「收到」就重复回存库存
+                const lr = appData.rejects.find(x => x && String(x.id) === String(r.id));
+                if (lr && !lr.received && r.received) {
+                    appData.rejects[appData.rejects.indexOf(lr)] = r;
                     added++;
                 }
             });
