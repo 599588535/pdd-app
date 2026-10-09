@@ -103,6 +103,13 @@
         .stock-img { display: inline-block; margin-top: 5px; margin-right: 6px; font-size: 0.72rem; color: var(--info); background: rgba(0,122,255,0.08); border-radius: 4px; padding: 2px 8px; text-decoration: none; cursor: pointer; }
         .stock-img:hover { background: rgba(0,122,255,0.16); }
         .stock-img.del { color: var(--danger); background: rgba(255,23,68,0.08); }
+        .stock-expand { display: inline-block; margin-top: 5px; margin-right: 6px; font-size: 0.72rem; color: var(--info); background: rgba(33,150,243,0.08); border: 0; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+        .stock-details { margin: 10px 0 0 68px; padding: 8px; background: #f8fafc; border: 1px solid #e8edf3; border-radius: 7px; }
+        .stock-detail-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #edf0f3; font-size: 0.76rem; }
+        .stock-detail-row:last-child { border-bottom: 0; }
+        .stock-detail-main { flex: 1; min-width: 0; color: #666; }
+        .stock-detail-actions { display: flex; gap: 5px; flex-shrink: 0; }
+        .stock-detail-actions .action-link { font-size: 0.72rem; padding: 3px 6px; }
 
         /* ===== 历史查询工具条 ===== */
         .hist-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 2px 0 6px; }
@@ -1119,7 +1126,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-07 21:40';
+        const APP_BUILD = '2026-10-09 12:00';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1146,6 +1153,36 @@
             // 原来只靠 0-999 的随机数容易撞号，撞号后按 id 删除/编辑会定位到错误的记录
             genId._c = (genId._c || 0) + 1;
             return Date.now().toString(36) + '-' + genId._c.toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+        }
+
+        // 同步删除标记：云端合并时不能把用户明确删除的记录重新补回来。
+        function ensureSyncMeta() {
+            if (!appData._deletedIds || typeof appData._deletedIds !== 'object') appData._deletedIds = {};
+            ['records', 'purchases', 'rejects'].forEach(k => {
+                if (!Array.isArray(appData._deletedIds[k])) appData._deletedIds[k] = [];
+            });
+        }
+
+        function markDeleted(kind, id) {
+            if (id == null) return;
+            ensureSyncMeta();
+            const list = appData._deletedIds[kind];
+            const value = String(id);
+            if (!list.some(x => String(x) === value)) list.push(id);
+        }
+
+        function wasDeleted(kind, id) {
+            ensureSyncMeta();
+            return appData._deletedIds[kind].some(x => String(x) === String(id));
+        }
+
+        function hasCloudMissingDeletions(cloud) {
+            ensureSyncMeta();
+            const remote = cloud && cloud._deletedIds && typeof cloud._deletedIds === 'object' ? cloud._deletedIds : {};
+            return ['records', 'purchases', 'rejects'].some(kind => {
+                const remoteIds = Array.isArray(remote[kind]) ? remote[kind].map(x => String(x)) : [];
+                return appData._deletedIds[kind].some(id => !remoteIds.includes(String(id)));
+            });
         }
 
         // 初始化数据（仅首次使用时载入示例）
@@ -1225,6 +1262,18 @@
 
             document.getElementById('filterType').addEventListener('change', renderHomeList);
             document.getElementById('stockList').addEventListener('click', function(e) {
+                const toggle = e.target.closest('[data-stock-toggle]');
+                if (toggle) {
+                    const targetKey = toggle.getAttribute('data-stock-toggle');
+                    const box = Array.from(document.querySelectorAll('[data-stock-details]'))
+                        .find(el => el.getAttribute('data-stock-details') === targetKey);
+                    if (box) {
+                        const open = box.style.display !== 'none';
+                        box.style.display = open ? 'none' : 'block';
+                        toggle.innerText = open ? toggle.getAttribute('data-closed-text') : toggle.getAttribute('data-open-text');
+                    }
+                    return;
+                }
                 const delImg = e.target.closest('[data-imgdel]');
                 if (delImg) { removeProductImage(delImg.getAttribute('data-imgdel')); return; }
                 const imgBtn = e.target.closest('[data-img]');
@@ -1268,6 +1317,7 @@
         function saveData(keepStamp) {
             if (!keepStamp) appData.updatedAt = Date.now();
             if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
+            ensureSyncMeta();
             // 0 库存商品：库存变 0 时开始计时，连续 7 天没库存就自动清理（历史流水保留）
             try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
 
@@ -1322,6 +1372,7 @@
             // （也要看商品：只建过商品、还没有任何流水时，也不能当成「没改动」而不推）
             return (appData.records && appData.records.length > 0) ||
                    (appData.purchases && appData.purchases.length > 0) ||
+                   (appData.rejects && appData.rejects.length > 0) ||
                    (appData.products && Object.keys(appData.products).length > 0);
         }
 
@@ -1354,6 +1405,8 @@
             if (!appData.products) appData.products = {};
             if (!appData.records) appData.records = [];
             if (!appData.purchases) appData.purchases = [];
+            if (!appData.rejects) appData.rejects = [];
+            ensureSyncMeta();
             if (!appData.updatedAt) appData.updatedAt = 1;
             if (broken) {
                 try { localStorage.removeItem('pddLastSyncAt'); localStorage.removeItem('pddLastSha'); } catch (e) {}
@@ -1857,7 +1910,7 @@
             (appData.records || []).forEach(r => { if (r && r.id != null) have['r' + String(r.id)] = true; });
             if (!Array.isArray(appData.records)) appData.records = [];
             (cloud.records || []).forEach(r => {
-                if (r && r.id != null && !have['r' + String(r.id)]) {
+                if (r && r.id != null && !wasDeleted('records', r.id) && !have['r' + String(r.id)]) {
                     appData.records.unshift(r);
                     have['r' + String(r.id)] = true;
                     added++;
@@ -1867,7 +1920,7 @@
             const hp = {};
             appData.purchases.forEach(p => { if (p && p.id != null) hp['p' + String(p.id)] = true; });
             (cloud.purchases || []).forEach(p => {
-                if (!p || p.id == null) return;
+                if (!p || p.id == null || wasDeleted('purchases', p.id)) return;
                 const pk = 'p' + String(p.id);
                 if (!hp[pk]) {
                     appData.purchases.unshift(p);
@@ -1894,7 +1947,7 @@
             (cloud.rejects || []).forEach(r => {
                 if (!r || r.id == null) return;
                 const jk = 'j' + String(r.id);
-                if (!hr[jk]) {
+                if (!wasDeleted('rejects', r.id) && !hr[jk]) {
                     appData.rejects.unshift(r);
                     hr[jk] = true;
                     added++;
@@ -1951,7 +2004,7 @@
                 try {
                     const cloudNow = await fetchCloud();
                     if (cloudNow && !cloudNow.notFound) {
-                        const added = mergeCloudRecords(cloudNow);
+                        const added = appData._clearAllPending ? 0 : mergeCloudRecords(cloudNow);
                         if (added > 0) {
                             appData.updatedAt = Date.now();
                             appData.isSeed = false;
@@ -2001,8 +2054,11 @@
                     // 标记「这份数据已与云端一致」：既写小键值，也写进数据本体（appData._syncedAt，
                     // 下次保存时随数据落盘）。小键值在存储写满时反而能存活、数据本体挂了它还在 ——
                     // hasLocalChanges 靠它识别"本机是旧的、云端才是新的"，绝不能反向覆盖。
+                    const clearWasUploaded = !!appData._clearAllPending;
+                    if (clearWasUploaded) delete appData._clearAllPending;
                     appData._syncedAt = appData.updatedAt;
                     try { localStorage.setItem('pddLastSyncAt', String(appData.updatedAt)); } catch (e) {}
+                    if (clearWasUploaded) saveData(true); // 持久化“清空已成功”，避免下次打开重复执行全量覆盖
                     setSyncStatus('✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
                     if (!silent) showToast('数据已推送到云端');
                     return true;
@@ -2181,7 +2237,8 @@
                     // 云端还没有数据文件：本机有真实数据就顺手建起来。
                     // 示例数据 / 空数据绝不推 —— 不然本机存储出问题时会把云端唯一的好数据抹掉。
                     const hasReal = !appData.isSeed &&
-                        (appData.records.length > 0 || Object.keys(appData.products).length > 0);
+                        (appData.records.length > 0 || appData.purchases.length > 0 ||
+                         appData.rejects.length > 0 || Object.keys(appData.products).length > 0);
                     if (hasReal) {
                         // 首次上传是全量数据（带图片可达几 MB），手机网络慢时要传一两分钟，必须明说，别让用户以为卡死
                         setSyncStatus('云端还没有数据，正在首次上传全部数据（数据大时要等一两分钟）...');
@@ -2202,7 +2259,7 @@
                     let syncedStamp = '';
                     try { syncedStamp = String(appData._syncedAt != null ? appData._syncedAt : (localStorage.getItem('pddLastSyncAt') || '')); } catch (e) {}
                     const cloudMoved = String(cloud.updatedAt || '') !== syncedStamp;
-                    if (cloudMoved && countLocalOnlyRecords(cloud) === 0) {
+                    if (!appData._clearAllPending && cloudMoved && countLocalOnlyRecords(cloud) === 0 && !hasCloudMissingDeletions(cloud)) {
                         // 云端已被另一台设备更新，而本机没有任何云端缺少的业务记录
                         // （所谓"未推送的改动"只是自动清理/时间戳被刷新）→ 直接接收云端，
                         // 本机这份自动留冲突备份，管理页可导出。
@@ -2743,11 +2800,24 @@
             showToast('商品已删除（历史记录保留）');
         }
 
+        function recalcProductCost(key) {
+            const k = String(key || '').toLowerCase();
+            const product = appData.products[k];
+            if (!product) return;
+            const ins = (appData.records || []).filter(r =>
+                r && r.type === 'in' && String(r.name || '').toLowerCase() === k
+            );
+            const qty = ins.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
+            const value = ins.reduce((sum, r) => sum + (parseFloat(r.qty) || 0) * (parseFloat(r.cost) || 0), 0);
+            if (qty > 0) product.cost = value / qty;
+        }
+
         function deleteRecord(id) {
             if(!confirm('确定要删除这条记录吗？')) return;
             const index = appData.records.findIndex(r => String(r.id) === String(id));
             if (index === -1) return;
             const record = appData.records[index];
+            markDeleted('records', record.id);
             const productName = record.name;
             // 商品的 key 一律是小写名（name.toLowerCase()），直接用原始名查会漏掉带大写字母的商品
             const prodKey = String(productName || '').toLowerCase();
@@ -2765,6 +2835,7 @@
             }
 
             appData.records.splice(index, 1);
+            if (record.type === 'in') recalcProductCost(prodKey);
             appData.isSeed = false;
             saveData();
             showToast('已删除');
@@ -2868,6 +2939,11 @@
                 }
             }
             if (record.type === 'return') prod.stock += record.qty;
+
+            if (record.type === 'in') {
+                recalcProductCost(oldKey);
+                recalcProductCost(newNameKey);
+            }
 
             appData.isSeed = false;
             saveData();
@@ -3239,6 +3315,7 @@
 
         function delPurchase(id) {
             if (!confirm('确定从待收货清单删除吗？')) return;
+            markDeleted('purchases', id);
             appData.purchases = (appData.purchases || []).filter(x => String(x.id) !== String(id));
             saveData();
             renderPurchases();
@@ -3316,6 +3393,7 @@
             const stocked = all.filter(p => p.stocked);
             if (!stocked.length) { showToast('没有已入库的历史记录'); return; }
             if (!confirm('确定清空这 ' + stocked.length + ' 条已入库的历史记录吗？\n\n只清「采购待收货」里的历史条目，不会影响库存数量，也不会删掉出入库流水。')) return;
+            all.filter(p => p.stocked).forEach(p => markDeleted('purchases', p.id));
             appData.purchases = all.filter(p => !p.stocked);
             saveData();
             renderPurchases();
@@ -4256,6 +4334,19 @@ function findByTracking(rawInput, allowFuzzy) {
                 const imgBtn = p.img
                     ? `<a href="javascript:void(0)" class="stock-img" data-img="${esc(key)}">🖼️ 换图</a><a href="javascript:void(0)" class="stock-img del" data-imgdel="${esc(key)}">移除图</a>`
                     : `<a href="javascript:void(0)" class="stock-img" data-img="${esc(key)}">🖼️ 加图片</a>`;
+                const inRecords = (appData.records || [])
+                    .filter(r => r && r.type === 'in' && String(r.name || '').toLowerCase() === String(p.name || '').toLowerCase())
+                    .sort((a, b) => tsOf(b) - tsOf(a));
+                const closedText = '📥 入库明细（' + inRecords.length + '）';
+                const openText = '📥 收起入库明细';
+                const detailRows = inRecords.length ? inRecords.map(r => `
+                    <div class="stock-detail-row">
+                        <div class="stock-detail-main">${esc(fmtTime(r.timestamp))} ｜ 入库 ${fmtQty(r.qty)} 件 ｜ 成本 ¥${(Number(r.cost) || 0).toFixed(2)}/件</div>
+                        <div class="stock-detail-actions">
+                            <a href="javascript:void(0)" class="action-link" onclick="openEditModal('${esc(r.id)}')">修改</a>
+                            <a href="javascript:void(0)" class="action-link delete" onclick="deleteRecord('${esc(r.id)}')">删除</a>
+                        </div>
+                    </div>`).join('') : '<div style="color:#999;font-size:0.76rem;padding:5px 0;">暂无入库流水</div>';
                 html += `
                 <div class="stock-item">
                     <div class="stock-item-info">
@@ -4263,7 +4354,7 @@ function findByTracking(rawInput, allowFuzzy) {
                         <div class="si-text">
                             <h4>${esc(p.name)}${tag}</h4>
                             <p>库存: ${p.stock.toFixed(2)} 件</p>
-                            <div>${imgBtn}</div>
+                            <div><button type="button" class="stock-expand" data-stock-toggle="${esc(key)}" data-closed-text="${closedText}" data-open-text="${openText}">${closedText}</button>${imgBtn}</div>
                         </div>
                     </div>
                     <div class="stock-item-value">
@@ -4271,6 +4362,7 @@ function findByTracking(rawInput, allowFuzzy) {
                         <div class="avg-cost">均价: ¥${p.cost.toFixed(2)}/件</div>
                         <a href="javascript:void(0)" class="stock-del" data-key="${esc(p.name)}">删除</a>
                     </div>
+                    <div class="stock-details" data-stock-details="${esc(key)}" style="display:none;">${detailRows}</div>
                 </div>`;
             });
             container.innerHTML = html;
@@ -4818,6 +4910,7 @@ function findByTracking(rawInput, allowFuzzy) {
 
         function delReject(id) {
             if (!confirm('确定删除这条拒收记录吗？')) return;
+            markDeleted('rejects', id);
             appData.rejects = (appData.rejects || []).filter(x => String(x.id) !== String(id));
             saveData();
             renderRejects();
@@ -4827,6 +4920,7 @@ function findByTracking(rawInput, allowFuzzy) {
             const got = (appData.rejects || []).filter(r => r.received);
             if (!got.length) { showToast('没有已收到的记录'); return; }
             if (!confirm('清空 ' + got.length + ' 条已收到的拒收记录？\n\n只清列表，不影响库存和出入库流水。')) return;
+            (appData.rejects || []).filter(r => r.received).forEach(r => markDeleted('rejects', r.id));
             appData.rejects = (appData.rejects || []).filter(r => !r.received);
             saveData();
             renderRejects();
@@ -4900,7 +4994,16 @@ function findByTracking(rawInput, allowFuzzy) {
         function clearAllData() {
             if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
             if (!confirm('再次确认：所有商品与记录都会被删除！建议先"备份JSON"或导出CSV。\n（若已开启云同步，清空结果也会同步到云端）')) return;
-            appData = { products: {}, records: [], purchases: [], isSeed: false };
+            (appData.records || []).forEach(r => markDeleted('records', r.id));
+            (appData.purchases || []).forEach(p => markDeleted('purchases', p.id));
+            (appData.rejects || []).forEach(r => markDeleted('rejects', r.id));
+            appData.products = {};
+            appData.records = [];
+            appData.purchases = [];
+            appData.rejects = [];
+            appData.isSeed = false;
+            // 清空是明确的全量覆盖操作，上传前不能再把云端旧记录合并回来。
+            appData._clearAllPending = true;
             localStorage.setItem('pddSeeded', '1');
             saveData();
             renderAllLists();
