@@ -1131,7 +1131,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-11 03';
+        const APP_BUILD = '2026-10-11 04';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -3093,7 +3093,6 @@
 
             const key = name.toLowerCase();
             if (!appData.products[key]) appData.products[key] = { name, cost: 0, stock: 0 };
-            appData.products[key].stock += qty;
 
             const fee = price * qty * getFeeRate();
             const totalReturn = price * qty + fee;
@@ -3101,6 +3100,7 @@
             // 记下退回商品的单件成本：货退回库存了，成本要还回来，
             // 退款对利润的影响只是「这单的利润」，不是整个货价。
             const retCost = resolveReturnCost(name, 0);
+            addReturnedStockWithCost(appData.products[key], qty, retCost);
 
             addRecord('return', { name, qty, price, cost: retCost, fee, totalReturn });
         });
@@ -3215,6 +3215,19 @@
             const productCost = parseFloat((appData.products || {})[key]?.cost) || 0;
             if (productCost > 0) return productCost;
             return historicalInCost(name);
+        }
+
+        function addReturnedStockWithCost(product, qty, unitCost) {
+            const q = safeNumber(qty);
+            const c = safeNumber(unitCost);
+            const oldStock = safeNumber(product.stock);
+            const oldCost = safeNumber(product.cost);
+            const newStock = oldStock + q;
+            if (c > 0 && newStock > 0) {
+                const oldValue = oldStock > 0 && oldCost > 0 ? oldStock * oldCost : 0;
+                product.cost = (oldValue + q * c) / newStock;
+            }
+            product.stock = newStock;
         }
 
         function repairProductCosts() {
@@ -5027,7 +5040,7 @@ function findByTracking(rawInput, allowFuzzy) {
             if (!appData.products[key]) appData.products[key] = { name: r.name, cost: 0, stock: 0 };
             // 退回商品的单件成本（同 formReturn 口径）：货回库存，成本要还回来
             const retCost = resolveReturnCost(r.name, r.cost);
-            appData.products[key].stock += r.qty;
+            addReturnedStockWithCost(appData.products[key], r.qty, retCost);
             const fee = r.price * r.qty * getFeeRate();
             addRecord('return', { name: r.name, qty: r.qty, price: r.price, cost: retCost, fee, totalReturn: r.price * r.qty + fee });
             r.received = true;
