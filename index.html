@@ -1126,7 +1126,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-11 01';
+        const APP_BUILD = '2026-10-11 02';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -4664,7 +4664,8 @@ function findByTracking(rawInput, allowFuzzy) {
         function renderHomeList() {
             const container = document.getElementById('recordList');
             const filter = document.getElementById('filterType').value;
-            let list = appData.records;
+            // 同步合并、导入和旧数据不一定保持数组顺序，概览必须按实际发生时间倒序。
+            let list = (appData.records || []).slice().sort((a, b) => tsOf(b) - tsOf(a));
             if (filter !== 'all') list = list.filter(r => r.type === filter);
             list = list.slice(0, 20);
 
