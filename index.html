@@ -1185,6 +1185,70 @@
             });
         }
 
+        function safeNumber(value, fallback) {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : (fallback == null ? 0 : fallback);
+        }
+
+        function normalizeAppData() {
+            if (!appData || typeof appData !== 'object') appData = {};
+            if (!appData.products || typeof appData.products !== 'object' || Array.isArray(appData.products)) appData.products = {};
+            if (!Array.isArray(appData.records)) appData.records = [];
+            if (!Array.isArray(appData.purchases)) appData.purchases = [];
+            if (!Array.isArray(appData.rejects)) appData.rejects = [];
+            Object.keys(appData.products).forEach(key => {
+                const p = appData.products[key] || {};
+                p.name = String(p.name || key);
+                p.stock = safeNumber(p.stock);
+                p.cost = Math.max(0, safeNumber(p.cost));
+                appData.products[key] = p;
+            });
+            appData.records.forEach(r => {
+                if (!r || typeof r !== 'object') return;
+                if (r.id == null || !/^[A-Za-z0-9_-]+$/.test(String(r.id))) r.id = genId();
+                r.type = String(r.type || 'expense');
+                r.name = String(r.name || (r.type === 'ship' ? '运费支出' : '未命名'));
+                r.qty = safeNumber(r.qty);
+                r.cost = safeNumber(r.cost);
+                r.price = safeNumber(r.price);
+                r.fee = safeNumber(r.fee);
+                r.profit = safeNumber(r.profit);
+                r.totalReturn = safeNumber(r.totalReturn);
+                if (!r.timestamp || isNaN(new Date(r.timestamp).getTime())) r.timestamp = new Date().toISOString();
+            });
+            const dedupeById = list => {
+                const seen = new Set();
+                return list.filter(item => {
+                    const id = String(item.id);
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            };
+            appData.records = dedupeById(appData.records);
+            appData.purchases = appData.purchases.filter(p => p && typeof p === 'object').map(p => {
+                p.id = p.id == null || !/^[A-Za-z0-9_-]+$/.test(String(p.id)) ? genId() : p.id;
+                p.name = String(p.name || '未命名');
+                p.qty = safeNumber(p.qty);
+                p.cost = Math.max(0, safeNumber(p.cost));
+                p.arrived = !!p.arrived;
+                p.stocked = !!p.stocked;
+                return p;
+            });
+            appData.purchases = dedupeById(appData.purchases);
+            appData.rejects = appData.rejects.filter(r => r && typeof r === 'object').map(r => {
+                r.id = r.id == null || !/^[A-Za-z0-9_-]+$/.test(String(r.id)) ? genId() : r.id;
+                r.name = String(r.name || '未命名');
+                r.qty = safeNumber(r.qty);
+                r.price = Math.max(0, safeNumber(r.price));
+                r.cost = Math.max(0, safeNumber(r.cost));
+                r.received = !!r.received;
+                return r;
+            });
+            appData.rejects = dedupeById(appData.rejects);
+            ensureSyncMeta();
+        }
+
         // 初始化数据（仅首次使用时载入示例）
         const initialRecords = [
             { name: "box酷洛米", qty: 9, cost: 145.41, timestamp: "2024-08-12T12:37:00Z" },
@@ -1390,7 +1454,7 @@
             }
             // 主存储读不到（被系统清空 / 写坏 / 配额写满只存了轻量版）时，
             // 用无图片的兜底副本救回流水和库存 —— 这正是「操作完重开就回到几天前」的主因之一
-            if (!appData.records.length) {
+            if (!appData || !Array.isArray(appData.records) || !appData.records.length) {
                 try {
                     const lite = localStorage.getItem('pddBizDataLite');
                     if (lite) {
@@ -1402,11 +1466,12 @@
                     }
                 } catch (e) {}
             }
-            if (!appData.products) appData.products = {};
-            if (!appData.records) appData.records = [];
-            if (!appData.purchases) appData.purchases = [];
-            if (!appData.rejects) appData.rejects = [];
-            ensureSyncMeta();
+            normalizeAppData();
+            const repairedCosts = repairProductCosts();
+            if (repairedCosts > 0) {
+                appData.updatedAt = Date.now();
+                try { localStorage.setItem('pddBizDataPro', JSON.stringify(appData)); } catch (e) {}
+            }
             if (!appData.updatedAt) appData.updatedAt = 1;
             if (broken) {
                 try { localStorage.removeItem('pddLastSyncAt'); localStorage.removeItem('pddLastSha'); } catch (e) {}
@@ -2198,9 +2263,7 @@
                 try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e) {}
             }
             appData = cloud;
-            if (!appData.products) appData.products = {};
-            if (!appData.records) appData.records = [];
-            if (!appData.purchases) appData.purchases = [];
+            normalizeAppData();
             appData.isSeed = false;
             saveData(true);   // 保留云端那份 updatedAt，本机才能认出「这份就是云端那份」
             lastCloudUpdatedAt = appData.updatedAt; // 已与云端一致，不再回推
@@ -2835,6 +2898,20 @@
             }
 
             appData.records.splice(index, 1);
+            if (record.type === 'in') {
+                let purchase = record.purchaseId != null
+                    ? (appData.purchases || []).find(p => String(p.id) === String(record.purchaseId))
+                    : null;
+                // 兼容旧记录：只有唯一一条完全匹配的已入库采购单时才自动恢复，避免误改其他进货单。
+                if (!purchase) {
+                    const matches = (appData.purchases || []).filter(p => p.stocked &&
+                        String(p.name || '').toLowerCase() === prodKey &&
+                        Math.abs(safeNumber(p.qty) - safeNumber(record.qty)) < 0.000001 &&
+                        Math.abs(safeNumber(p.cost) - safeNumber(record.cost)) < 0.000001);
+                    if (matches.length === 1) purchase = matches[0];
+                }
+                if (purchase) { purchase.stocked = false; delete purchase.stockedAt; }
+            }
             if (record.type === 'in') recalcProductCost(prodKey);
             appData.isSeed = false;
             saveData();
@@ -2885,6 +2962,18 @@
             const oldSplitQty = record.splitQty || 1;
             const oldSaleType = record.saleType || 'whole';
             const oldKey = String(oldName || '').toLowerCase();
+            const newName = document.getElementById('editName').value.trim() || record.name || record.category || '其他支出';
+            const newQty = parseFloat(document.getElementById('editQty').value);
+            const newCost = parseFloat(document.getElementById('editCost').value);
+            const newPrice = parseFloat(document.getElementById('editPrice').value);
+            if (!newName) { alert('请输入名称'); return; }
+            if (!Number.isFinite(newQty) || newQty <= 0) { alert('数量/金额必须大于 0'); return; }
+            if ((record.type === 'in' || record.type === 'return') && (!Number.isFinite(newCost) || newCost <= 0)) {
+                alert('成本必须大于 0'); return;
+            }
+            if (record.type === 'out' && (!Number.isFinite(newPrice) || newPrice <= 0 || !Number.isFinite(newCost) || newCost < 0)) {
+                alert('售价必须大于 0，成本不能为负数'); return;
+            }
 
             if (appData.products[oldKey]) {
                 if (record.type === 'in') appData.products[oldKey].stock -= oldQty;
@@ -2898,15 +2987,15 @@
                 if (record.type === 'return') appData.products[oldKey].stock -= oldQty;
             }
 
-            record.name = document.getElementById('editName').value.trim() || record.name;
-            record.qty = parseFloat(document.getElementById('editQty').value) || 0;
+            record.name = newName;
+            record.qty = newQty;
             const feeRate = getFeeRate();
             
             if (record.type === 'in' || record.type === 'return') {
-                record.cost = parseFloat(document.getElementById('editCost').value) || 0;
+                record.cost = newCost;
             } else if (record.type === 'out') {
-                record.price = parseFloat(document.getElementById('editPrice').value) || 0;
-                record.cost = parseFloat(document.getElementById('editCost').value) || 0;
+                record.price = newPrice;
+                record.cost = newCost;
                 const fee = record.price * record.qty * feeRate;
                 record.fee = fee;
                 record.profit = (record.price * record.qty) - (record.cost * record.qty) - fee;
@@ -2958,6 +3047,9 @@
             let cost = 0;
             const qty = parseFloat(document.getElementById('inQty').value) || 0;
 
+            if (!name) { alert('请输入商品名称'); return; }
+            if (!Number.isFinite(qty) || qty <= 0) { alert('请输入大于 0 的入库数量'); return; }
+
             if (inMode === 'total') {
                 const total = parseFloat(document.getElementById('inTotalCost').value) || 0;
                 if (qty > 0) cost = total / qty;
@@ -2965,7 +3057,7 @@
                 cost = parseFloat(document.getElementById('inCost').value) || 0;
             }
 
-            if (cost <= 0) { alert('请输入有效的成本或总价'); return; }
+            if (!Number.isFinite(cost) || cost <= 0) { alert('请输入有效的成本或总价'); return; }
 
             const key = name.toLowerCase();
             if (!appData.products[key]) appData.products[key] = { name, cost: 0, stock: 0 };
@@ -3003,9 +3095,7 @@
 
             // 记下退回商品的单件成本：货退回库存了，成本要还回来，
             // 退款对利润的影响只是「这单的利润」，不是整个货价。
-            const retCost = (appData.products[key].cost > 0)
-                ? appData.products[key].cost
-                : lastOutCost(name);
+            const retCost = resolveReturnCost(name, 0);
 
             addRecord('return', { name, qty, price, cost: retCost, fee, totalReturn });
         });
@@ -3098,16 +3188,48 @@
             return rec ? (rec.cost || 0) : 0;
         }
 
+        function historicalInCost(name) {
+            const k = String(name || '').toLowerCase();
+            let qty = 0, value = 0;
+            (appData.records || []).forEach(r => {
+                if (r.type !== 'in' || String(r.name || '').toLowerCase() !== k) return;
+                const q = parseFloat(r.qty) || 0;
+                const c = parseFloat(r.cost) || 0;
+                if (q > 0 && c > 0) { qty += q; value += q * c; }
+            });
+            return qty > 0 ? value / qty : 0;
+        }
+
+        function resolveReturnCost(name, explicitCost) {
+            const direct = parseFloat(explicitCost) || 0;
+            if (direct > 0) return direct;
+            // 拒收退回的是原订单商品，优先沿用最近一次出单成本。
+            const outCost = lastOutCost(name);
+            if (outCost > 0) return outCost;
+            const key = String(name || '').toLowerCase();
+            const productCost = parseFloat((appData.products || {})[key]?.cost) || 0;
+            if (productCost > 0) return productCost;
+            return historicalInCost(name);
+        }
+
+        function repairProductCosts() {
+            let changed = 0;
+            Object.keys(appData.products || {}).forEach(key => {
+                const p = appData.products[key];
+                if (!p || parseFloat(p.cost) > 0) return;
+                const recovered = resolveReturnCost(p.name, 0);
+                if (recovered > 0) { p.cost = recovered; changed++; }
+            });
+            return changed;
+        }
+
         // 退货记录对应的「单件成本」：
         //   1) 退货时记下的成本（新记录都有）；
         //   2) 老记录没记 → 用该商品当前成本均价兜底；
         //   3) 再不行 → 用最近一次出单的成本。
         function returnUnitCost(r) {
-            if (r && r.cost != null && !isNaN(parseFloat(r.cost))) return parseFloat(r.cost) || 0;
-            const k = String((r && r.name) || '').toLowerCase();
-            const p = (appData.products || {})[k];
-            if (p && p.cost > 0) return p.cost;
-            return lastOutCost(r && r.name);
+            if (r && parseFloat(r.cost) > 0) return parseFloat(r.cost);
+            return resolveReturnCost(r && r.name, 0);
         }
 
         function updateDashboard() {
@@ -3222,6 +3344,7 @@
             if (lock) { try { localStorage.setItem('pddPurLock', keepLock ? '1' : '0'); } catch (e) {} }
             if (!name) { alert('请输入商品名称'); return; }
             if (qty <= 0) { alert('请输入有效的数量'); return; }
+            if (cost < 0 || !Number.isFinite(cost)) { alert('采购成本不能为负数'); return; }
 
             // 采购待收货：名字填好就顺手在「库存总览」里建好商品（0 库存占位，到货入库时补数量）
             const purKey = name.toLowerCase();
@@ -3339,7 +3462,7 @@
                 const newStock = prod.stock + p.qty;
                 if (newStock > 0) prod.cost = (oldTotal + newTotal) / newStock;
                 prod.stock = newStock;
-                addRecord('in', { name: p.name, cost: p.cost, qty: p.qty });
+                addRecord('in', { name: p.name, cost: p.cost, qty: p.qty, purchaseId: p.id });
                 p.stocked = true;
                 p.stockedAt = new Date().toISOString();
                 saveData();
@@ -3654,7 +3777,7 @@
             const newStock = prod.stock + p.qty;
             if (newStock > 0) prod.cost = (oldTotal + newTotal) / newStock;
             prod.stock = newStock;
-            addRecordSilent('in', { name: p.name, cost: p.cost, qty: p.qty });
+            addRecordSilent('in', { name: p.name, cost: p.cost, qty: p.qty, purchaseId: p.id });
             return true;
         }
 
@@ -4835,9 +4958,11 @@ function findByTracking(rawInput, allowFuzzy) {
                 const price = parseFloat(document.getElementById('rejPrice').value) || 0;
                 if (!name) { alert('请输入商品名称'); return; }
                 if (qty <= 0) { alert('请输入有效的数量'); return; }
+                if (price < 0 || !Number.isFinite(price)) { alert('退款金额不能为负数'); return; }
                 if (!Array.isArray(appData.rejects)) appData.rejects = [];
+                const rejectCost = resolveReturnCost(name, 0);
                 appData.rejects.unshift({
-                    id: genId(), trackingNo, name, qty, price,
+                    id: genId(), trackingNo, name, qty, price, cost: rejectCost,
                     received: false,
                     createdAt: new Date().toISOString()
                 });
@@ -4895,9 +5020,7 @@ function findByTracking(rawInput, allowFuzzy) {
             const key = r.name.toLowerCase();
             if (!appData.products[key]) appData.products[key] = { name: r.name, cost: 0, stock: 0 };
             // 退回商品的单件成本（同 formReturn 口径）：货回库存，成本要还回来
-            const retCost = (appData.products[key].cost > 0)
-                ? appData.products[key].cost
-                : lastOutCost(r.name);
+            const retCost = resolveReturnCost(r.name, r.cost);
             appData.products[key].stock += r.qty;
             const fee = r.price * r.qty * getFeeRate();
             addRecord('return', { name: r.name, qty: r.qty, price: r.price, cost: retCost, fee, totalReturn: r.price * r.qty + fee });
@@ -4961,9 +5084,8 @@ function findByTracking(rawInput, allowFuzzy) {
                     const json = JSON.parse(e.target.result);
                     if (json.products && json.records) {
                         appData = json;
-                        if (!appData.products) appData.products = {};
-                        if (!appData.records) appData.records = [];
-                        if (!appData.purchases) appData.purchases = [];
+                        normalizeAppData();
+                        repairProductCosts();
                         appData.isSeed = false;
                         localStorage.setItem('pddSeeded', '1');
                         saveData();
