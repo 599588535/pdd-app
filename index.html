@@ -292,6 +292,11 @@
             .span-2 { grid-column: span 2; }
             .desktop-only { display: block; }
             #page-home.active { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+            /* 电脑端出单页：历史紧跟出单表单，拒收件独占右列，避免历史被右侧长列表顶到页面底部。 */
+            #page-out.active { grid-template-areas: "out-form out-reject" "out-history out-reject"; }
+            #page-out.active > .card:nth-child(1) { grid-area: out-form; }
+            #page-out.active > .card:nth-child(2) { grid-area: out-reject; }
+            #page-out.active > .card:nth-child(3) { grid-area: out-history; }
             .record-item:hover { background: #fdf7f7; }
         }
 
@@ -1126,7 +1131,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-11 02';
+        const APP_BUILD = '2026-10-11 03';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
