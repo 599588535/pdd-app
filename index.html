@@ -1131,7 +1131,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-12 02';
+        const APP_BUILD = '2026-10-13 01';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1477,15 +1477,9 @@
             }
             normalizeAppData();
             const repairedCosts = repairProductCosts();
-            const beforeInventory = JSON.stringify(appData.products || {});
-            rebuildInventoryFromRecords();
-            const inventoryChanged = beforeInventory !== JSON.stringify(appData.products || {});
-            if (repairedCosts > 0 || inventoryChanged) {
+            if (repairedCosts > 0) {
                 appData.updatedAt = Date.now();
-                try {
-                    localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
-                    localStorage.setItem('pddDirty', '1');
-                } catch (e) {}
+                try { localStorage.setItem('pddBizDataPro', JSON.stringify(appData)); } catch (e) {}
             }
             if (!appData.updatedAt) appData.updatedAt = 1;
             if (broken) {
@@ -1980,46 +1974,6 @@
             return n;
         }
 
-        // 根据完整流水重建库存。商品表只是缓存，跨设备同步时不能让一台设备的旧缓存
-        // 覆盖另一台设备刚刚出单后的库存；流水才是库存变化的事实来源。
-        // 没有任何入库/退回流水的商品，可能是手工导入或旧数据，保留原库存。
-        function rebuildInventoryFromRecords() {
-            const products = appData.products || {};
-            const grouped = {};
-            (appData.records || []).forEach(r => {
-                if (!r || !['in', 'out', 'return'].includes(r.type)) return;
-                const key = String(r.name || '').trim().toLowerCase();
-                if (!key) return;
-                if (!grouped[key]) grouped[key] = [];
-                grouped[key].push(r);
-            });
-            Object.keys(grouped).forEach(key => {
-                const rows = grouped[key];
-                if (!rows.some(r => r.type === 'in' || r.type === 'return')) return;
-                const product = products[key] || { name: rows[0].name, stock: 0, cost: 0 };
-                let stock = 0, cost = 0;
-                rows.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
-                rows.forEach(r => {
-                    const qty = parseFloat(r.qty) || 0;
-                    if (qty <= 0) return;
-                    if (r.type === 'in' || r.type === 'return') {
-                        const itemCost = parseFloat(r.cost) || 0;
-                        const oldTotal = stock * cost;
-                        const newTotal = qty * itemCost;
-                        stock += qty;
-                        if (stock > 0) cost = (oldTotal + newTotal) / stock;
-                    } else if (r.type === 'out') {
-                        stock -= r.saleType === 'split' ? qty / (parseFloat(r.splitQty) || 1) : qty;
-                    }
-                });
-                product.stock = stock;
-                if (stock > 0 || cost > 0) product.cost = cost;
-                if (!product.name) product.name = rows[0].name;
-                products[key] = product;
-            });
-            appData.products = products;
-        }
-
         // 推送前的合并：把云端有、本机没有的记录（流水/采购单/拒收件）按 id 并进本机。
         // 返回合并进来的条数。目的只有一个：任何一次推送都不可能把另一台设备
         // 刚录的内容整包抹掉 —— 记录只增不丢，删除类操作以最新一台设备为准。
@@ -2087,10 +2041,11 @@
             // 放行本机旧商品表推上去，把手机端的最新库存顶回去。
             // 本机独有的商品（云端没有的 key）保留，其余以云端为准。
             if (added > 0 && cloud.products) {
-                Object.keys(cloud.products).forEach(k => {
-                    if (!appData.products[k]) appData.products[k] = cloud.products[k];
+                const localOnlyProducts = {};
+                Object.keys(appData.products || {}).forEach(k => {
+                    if (!(k in cloud.products)) localOnlyProducts[k] = appData.products[k];
                 });
-                rebuildInventoryFromRecords();
+                appData.products = Object.assign({}, cloud.products, localOnlyProducts);
             }
             return added;
         }
