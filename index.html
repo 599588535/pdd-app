@@ -309,6 +309,8 @@
         .out-profit-box .op-rate { font-size: 0.85rem; font-weight: bold; color: var(--success); }
         .out-profit-box .op-rate.neg { color: var(--danger); }
         .out-profit-box .op-note { font-size: 0.7rem; color: #999; width: 100%; line-height: 1.5; }
+        .out-stock-warning { margin-top: 6px; padding: 6px 9px; border-radius: 5px; font-size: 0.8rem; line-height: 1.4; background: #fff8e1; border: 1px solid #ffe082; color: #8a5a00; }
+        .out-stock-warning.last-one { background: #fff0f0; border-color: #ffcdd2; color: #c62828; font-weight: 600; }
 
         /* 经营概览 · 库存价值拆分小字 */
         .stat-sub .sub-sep { opacity: 0.6; margin: 0 2px; }
@@ -679,6 +681,7 @@
                     <div class="form-group" data-page-node-id="XNra9w4hl65jiqNjHYgU3T">
                         <label data-page-node-id="Fc7NepJ8BnkUu0bFWBuC1M">卖出数量</label>
                         <input type="number" id="outQty" placeholder="0" oninput="updateOutProfit()" data-page-node-id="zpgTqgs4FEwYKz3dmi3IIu">
+                        <div id="outStockWarning" class="out-stock-warning" role="status" aria-live="polite" style="display:none;"></div>
                     </div>
 
                     <div class="out-profit-box" id="outProfitLive" data-page-node-id="outProfitLive01">
@@ -1131,7 +1134,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-13 01';
+        const APP_BUILD = '2026-10-18 01';
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -2784,6 +2787,25 @@
             box.className = 'out-profit-box' + (noCost ? ' warn' : '');
         }
 
+        // 库存预警只显示在出单表单内，不弹窗、不打断出单。
+        function showOutStockWarning(name, stock) {
+            const el = document.getElementById('outStockWarning');
+            if (!el) return;
+            const n = Number(stock);
+            if (!Number.isFinite(n) || (Math.abs(n - 1) > 1e-9 && Math.abs(n - 2) > 1e-9)) {
+                el.style.display = 'none';
+                el.className = 'out-stock-warning';
+                el.innerText = '';
+                return;
+            }
+            const one = Math.abs(n - 1) <= 1e-9;
+            el.className = 'out-stock-warning' + (one ? ' last-one' : '');
+            el.innerText = one
+                ? '⚠️ 库存预警：' + name + ' 出单后仅剩 1 个'
+                : '⚠️ 库存预警：' + name + ' 出单后仅剩 2 个';
+            el.style.display = 'block';
+        }
+
         document.getElementById('formOut').addEventListener('submit', (e) => {
             e.preventDefault();
             const name = document.getElementById('outName').value.trim();
@@ -2835,6 +2857,7 @@
             const profit = (price * qty) - (costForRecord * qty) - fee;
 
             addRecord('out', { name, price, cost: costForRecord, qty, profit, fee, saleType, splitQty: saleType === 'split' ? splitQty : 0 });
+            showOutStockWarning(name, product.stock);
         });
 
         // 删除商品：清除库存，保留历史销售记录
