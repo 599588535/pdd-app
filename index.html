@@ -974,6 +974,29 @@
                 <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;" data-page-node-id="uixiUWFIf0lk6RPdXWpLbx">*配置并保存后自动开启：修改后自动上传、打开页面自动拉取云端较新数据<br data-page-node-id="YlNrBTOAv9Up7UizHgTMyA">*建议数据仓库都用<b data-page-node-id="zBXF85AjZDzgAzmeFvinKQ">私有</b>仓库（数据不公开）。选 Gitee 时：gitee.com → 设置 → 安全设置 → 私人令牌 → 勾选 <b>projects</b> 权限 → 生成后粘贴到上面</small>
             </div>
 
+            <div class="card" data-page-node-id="supabaseCard01">
+                <div class="card-header" style="border-left-color: #3ecf8e;">🟢 实时数据库（Supabase）</div>
+                <div class="form-group">
+                    <label>登录邮箱</label>
+                    <input type="email" id="supabaseEmail" placeholder="填写 Supabase 用户邮箱" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>登录密码</label>
+                    <input type="password" id="supabasePassword" placeholder="填写 Supabase 登录密码" autocomplete="current-password">
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+                    <button class="btn btn-outline btn-sm" type="button" onclick="supabaseLogin()">🔐 登录实时数据库</button>
+                    <button class="btn btn-outline btn-sm" type="button" onclick="supabaseLogout()">退出登录</button>
+                </div>
+                <div class="form-group">
+                    <label>导入刚才的 JSON 备份（只导入当前库存，历史流水单独保存）</label>
+                    <input type="file" id="supabaseBackupFile" accept=".json,application/json">
+                </div>
+                <button class="btn btn-outline btn-sm" type="button" onclick="importBackupToSupabase()">📥 导入到实时数据库</button>
+                <div class="sync-status" id="supabaseStatus">未连接 Supabase</div>
+                <small style="color:#999; font-size:0.75rem; display:block; margin-top:5px;">登录密码只在当前浏览器提交给 Supabase，不会保存到网页或上传到云端。</small>
+            </div>
+
             <!-- 版本体检（新增） -->
             <div class="card" data-page-node-id="verCard01">
                 <div class="card-header" style="border-left-color: var(--warning);" data-page-node-id="verCard02">🩺 版本体检（更新有没有生效）</div>
@@ -1117,6 +1140,7 @@
 
     <!-- h5-qrcode 备用 reader 已移入 #scanModal 内（见 .video-wrap） -->
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
         let appData = {
             products: {},
@@ -1134,7 +1158,14 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-10-18 01';
+        const APP_BUILD = '2026-11-01 07';
+        const SUPABASE_URL = 'https://fcppclegmitjdvqwjvez.supabase.co';
+        const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nmF7i6iPCL1pm_UxeMCMWQ_HPiv77-w';
+        let supabaseClient = null;
+        let supabaseUser = null;
+        let supabaseRealtimeChannel = null;
+        let supabaseProductSyncTimer = null;
+        let supabaseCloudRecordSyncTimer = null;
 
         function getFeeRate() {
             const v = parseFloat(localStorage.getItem('pddFeeRate'));
@@ -1275,6 +1306,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
             loadGithubConfig();
+            initSupabaseConnection();
             loadFeeRate();
             document.getElementById('shipDate').value = todayStr();
             document.getElementById('expenseDate').value = todayStr();
@@ -1365,11 +1397,19 @@
             });
 
             initialSync();
-            window.addEventListener('online', () => initialSync());
+            window.addEventListener('online', () => {
+                initialSync();
+                scheduleSupabaseProductSync();
+                syncPendingSupabaseRecords();
+                scheduleSupabaseCloudRecordSync();
+            });
             window.addEventListener('pagehide', flushSyncOnExit);
 
             // 定时瞄一眼云端：另一台设备改了数据，这边最多 90 秒就能看到（页面在前台时）
             cloudPollTimer = setInterval(() => pollCloudOnce(false), CLOUD_POLL_MS);
+            window.addEventListener('focus', () => {
+                if (document.visibilityState === 'visible') pollCloudOnce(true);
+            });
             // 从后台切回前台的那一下立刻查：拿起手机就能看到电脑端刚改的内容，不用等下一轮
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') setTimeout(() => pollCloudOnce(true), 400);
@@ -1387,7 +1427,10 @@
         // 从云端接收数据时必须用它 —— 否则会把云端那份的时间戳改成"现在"，
         // 导致两边永远对不上、互相来回推。
         function saveData(keepStamp) {
-            if (!keepStamp) appData.updatedAt = Date.now();
+            if (!keepStamp) {
+                appData.updatedAt = Date.now();
+                localChangeSeq++;
+            }
             if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
             ensureSyncMeta();
             if (!keepStamp) {
@@ -1423,6 +1466,10 @@
             } catch (e) { console.warn(e); }
             // 自动推送的排期放最后、且不受上面任何异常影响：只要改过数据就必须有机会推上去
             scheduleAutoSync();
+            if (!keepStamp) {
+                scheduleSupabaseProductSync();
+                scheduleSupabaseCloudRecordSync();
+            }
         }
 
         /* 本机有没有「改过但还没推上去」的数据。
@@ -1538,6 +1585,358 @@
                 : 'ghp_...';
         }
 
+        function setSupabaseStatus(text, ok) {
+            const el = document.getElementById('supabaseStatus');
+            if (!el) return;
+            el.innerText = text;
+            el.style.color = ok ? '#008a4b' : '#777';
+        }
+
+        function initSupabaseConnection() {
+            try {
+                if (!window.supabase || !window.supabase.createClient) {
+                    setSupabaseStatus('⚠️ Supabase 客户端加载失败，请检查网络后刷新页面');
+                    return;
+                }
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+                supabaseClient.auth.getSession().then(({ data }) => {
+                    if (data && data.session && data.session.user) {
+                        supabaseUser = data.session.user;
+                        try { localStorage.setItem('pddSupabasePrimary', '1'); } catch (e) {}
+                        const email = document.getElementById('supabaseEmail');
+                        if (email && supabaseUser.email) email.value = supabaseUser.email;
+                        setSupabaseStatus('✅ 已登录实时数据库：' + (supabaseUser.email || ''), true);
+                        startSupabaseRealtime();
+                        restoreSupabaseForEmptyDevice();
+                        syncPendingSupabaseRecords();
+                        scheduleSupabaseCloudRecordSync();
+                    } else setSupabaseStatus('未连接 Supabase');
+                }).catch(() => setSupabaseStatus('未连接 Supabase'));
+            } catch (e) {
+                setSupabaseStatus('⚠️ Supabase 初始化失败：' + (e.message || e));
+            }
+        }
+
+        async function supabaseLogin() {
+            if (!supabaseClient) initSupabaseConnection();
+            if (!supabaseClient) return;
+            const email = String(document.getElementById('supabaseEmail')?.value || '').trim();
+            const password = String(document.getElementById('supabasePassword')?.value || '');
+            if (!email || !password) { setSupabaseStatus('⚠️ 请输入 Supabase 登录邮箱和密码'); return; }
+            setSupabaseStatus('正在登录 Supabase...');
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) { setSupabaseStatus('❌ 登录失败：' + (error.message || '账号或密码错误')); return; }
+            supabaseUser = data && data.user;
+            try { localStorage.setItem('pddSupabaseEmail', email); localStorage.setItem('pddSupabasePrimary', '1'); } catch (e) {}
+            setSupabaseStatus('✅ 已登录实时数据库：' + email, true);
+            startSupabaseRealtime();
+            restoreSupabaseForEmptyDevice();
+            syncPendingSupabaseRecords();
+            scheduleSupabaseCloudRecordSync();
+        }
+
+        async function supabaseLogout() {
+            try { if (supabaseClient) await supabaseClient.auth.signOut(); } catch (e) {}
+            supabaseUser = null;
+            try { localStorage.removeItem('pddSupabasePrimary'); } catch (e) {}
+            if (supabaseRealtimeChannel && supabaseClient) {
+                try { await supabaseClient.removeChannel(supabaseRealtimeChannel); } catch (e) {}
+            }
+            supabaseRealtimeChannel = null;
+            setSupabaseStatus('未连接 Supabase');
+        }
+
+        async function restoreSupabaseForEmptyDevice() {
+            if (!supabaseClient || !supabaseUser) return;
+            const hasLocalData = !appData.isSeed && (
+                (appData.records && appData.records.length) ||
+                (appData.purchases && appData.purchases.length) ||
+                (appData.rejects && appData.rejects.length) ||
+                (appData.products && Object.keys(appData.products).length)
+            );
+            if (hasLocalData) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('legacy_snapshots')
+                    .select('data,imported_at')
+                    .eq('owner_id', supabaseUser.id)
+                    .order('imported_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (error) throw error;
+                if (!data || !data.data) return;
+                appData = data.data;
+                normalizeAppData();
+                appData.isSeed = false;
+                try { localStorage.setItem('pddBizDataPro', JSON.stringify(appData)); } catch (e) {}
+                renderAllLists();
+                updateDashboard();
+                renderTodayCard();
+                setSupabaseStatus('✅ 已自动恢复云端备份数据', true);
+            } catch (e) {
+                setSupabaseStatus('⚠️ 云端备份自动恢复失败：' + (e.message || e));
+            }
+        }
+
+        function applySupabaseCloudRecord(row) {
+            if (!row || !row.entity_type || !row.payload) return;
+            const kind = row.entity_type;
+            const listName = kind === 'record' ? 'records' : (kind === 'purchase' ? 'purchases' : 'rejects');
+            const list = Array.isArray(appData[listName]) ? appData[listName] : (appData[listName] = []);
+            const p = row.payload;
+            const idx = list.findIndex(x => x && (
+                String(x.id) === String(p.id) || String(x.supabaseClientId || '') === String(row.client_id)
+            ));
+            if (row.is_deleted) {
+                if (idx >= 0) list.splice(idx, 1);
+                markDeleted(listName, p.id);
+            } else if (idx >= 0) {
+                if (String(list[idx].supabaseClientId || '') !== String(row.client_id)) p.supabaseClientId = row.client_id;
+                list[idx] = p;
+            } else {
+                if (kind === 'record' && !p.supabaseClientId && !String(row.client_id).startsWith('legacy-record-')) p.supabaseClientId = row.client_id;
+                list.unshift(p);
+            }
+            appData.isSeed = false;
+            saveData(true);
+            renderAllLists();
+            setSupabaseStatus('✅ 已收到全部业务数据的实时更新', true);
+        }
+
+        function startSupabaseRealtime() {
+            if (!supabaseClient || !supabaseUser) return;
+            if (supabaseRealtimeChannel) {
+                try { supabaseClient.removeChannel(supabaseRealtimeChannel); } catch (e) {}
+            }
+            supabaseRealtimeChannel = supabaseClient.channel('pdd-products-' + supabaseUser.id)
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'products',
+                    filter: 'owner_id=eq.' + supabaseUser.id
+                }, payload => {
+                    const row = payload && payload.new;
+                    if (!row || !row.name) return;
+                    const key = String(row.name).toLowerCase();
+                    if (payload.eventType === 'DELETE') delete appData.products[key];
+                    else {
+                        const old = appData.products[key] || { name: row.name, stock: 0, cost: 0 };
+                        old.name = row.name;
+                        old.stock = Number(row.stock) || 0;
+                        old.cost = Number(row.cost) || 0;
+                        appData.products[key] = old;
+                    }
+                    saveData(true);
+                    renderAllLists();
+                    setSupabaseStatus('✅ 已收到实时库存更新', true);
+                })
+                .on('postgres_changes', {
+                    event: 'INSERT', schema: 'public', table: 'inventory_events',
+                    filter: 'owner_id=eq.' + supabaseUser.id
+                }, payload => {
+                    const row = payload && payload.new;
+                    if (!row || !row.client_id) return;
+                    const exists = (appData.records || []).some(r => String(r.supabaseClientId || '') === String(row.client_id));
+                    if (exists) return;
+                    let meta = {};
+                    try { meta = row.note ? JSON.parse(row.note) : {}; } catch (e) {}
+                    appData.records.unshift({
+                        id: row.client_id,
+                        supabaseClientId: row.client_id,
+                        type: row.event_type,
+                        timestamp: row.occurred_at || row.created_at,
+                        name: meta.name || '',
+                        qty: Number(row.quantity) || 0,
+                        cost: Number(row.unit_cost) || 0,
+                        price: Number(row.sale_price) || 0,
+                        fee: Number(row.fee) || 0,
+                        profit: Number(row.profit) || 0,
+                        saleType: row.sale_type || 'whole',
+                        splitQty: Number(row.split_qty) || 0,
+                        note: meta.note || ''
+                    });
+                    saveData(true);
+                    renderAllLists();
+                    setSupabaseStatus('✅ 已收到实时流水更新', true);
+                })
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'cloud_records',
+                    filter: 'owner_id=eq.' + supabaseUser.id
+                }, payload => {
+                    if (payload && payload.new) applySupabaseCloudRecord(payload.new);
+                })
+                .subscribe(status => {
+                    if (status === 'SUBSCRIBED') setSupabaseStatus('✅ 实时数据库已连接', true);
+                });
+        }
+
+        function newSupabaseUuid() {
+            try { if (crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 3 | 8);
+                return v.toString(16);
+            });
+        }
+
+        async function syncRecordToSupabase(record) {
+            if (!supabaseClient || !supabaseUser || !record || !['in', 'out', 'return'].includes(record.type)) return;
+            if (!record.supabaseClientId) record.supabaseClientId = newSupabaseUuid();
+            try {
+                const { data: product, error: productError } = await supabaseClient
+                    .from('products').select('id').eq('owner_id', supabaseUser.id).eq('name', String(record.name || '')).maybeSingle();
+                if (productError || !product) {
+                    setTimeout(() => syncRecordToSupabase(record), 1500);
+                    return;
+                }
+                const note = JSON.stringify({ name: record.name || '', note: record.note || '' });
+                const { error } = await supabaseClient.from('inventory_events').insert({
+                    owner_id: supabaseUser.id,
+                    product_id: product.id,
+                    event_type: record.type,
+                    quantity: Number(record.qty) || 0,
+                    unit_cost: Number(record.cost) || 0,
+                    sale_price: Number(record.price) || 0,
+                    fee: Number(record.fee) || 0,
+                    profit: Number(record.profit) || 0,
+                    sale_type: record.saleType || 'whole',
+                    split_qty: Number(record.splitQty) || 0,
+                    client_id: record.supabaseClientId,
+                    note,
+                    occurred_at: record.timestamp || new Date().toISOString()
+                });
+                if (error && !/duplicate|unique/i.test(error.message || '')) throw error;
+            } catch (e) {
+                try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
+                setSupabaseStatus('⚠️ 流水已保存在本机，实时数据库稍后重试');
+            }
+        }
+
+        function scheduleSupabaseProductSync() {
+            if (!supabaseClient || !supabaseUser) return;
+            clearTimeout(supabaseProductSyncTimer);
+            supabaseProductSyncTimer = setTimeout(syncSupabaseProducts, 700);
+        }
+
+        function syncPendingSupabaseRecords() {
+            if (!supabaseClient || !supabaseUser) return;
+            (appData.records || []).filter(r => r && r.supabaseClientId && ['in', 'out', 'return'].includes(r.type))
+                .slice(0, 100).forEach((r, i) => setTimeout(() => syncRecordToSupabase(r), i * 120));
+        }
+
+        async function syncSupabaseProducts() {
+            if (!supabaseClient || !supabaseUser) return;
+            const rows = Object.values(appData.products || {}).filter(p => p && p.name).map(p => ({
+                owner_id: supabaseUser.id,
+                name: String(p.name),
+                stock: Number(p.stock) || 0,
+                cost: Number(p.cost) || 0,
+                image_url: null
+            }));
+            if (!rows.length) return;
+            try {
+                for (let i = 0; i < rows.length; i += 50) {
+                    const { error } = await supabaseClient.from('products').upsert(rows.slice(i, i + 50), { onConflict: 'owner_id,name' });
+                    if (error) throw error;
+                }
+                try { localStorage.removeItem('pddSupabaseDirty'); } catch (e) {}
+                setSupabaseStatus('✅ 库存已同步到实时数据库', true);
+            } catch (e) {
+                try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
+                setSupabaseStatus('⚠️ 实时数据库暂时不可用，本机库存已保留，网络恢复后会重试');
+            }
+        }
+
+        function scheduleSupabaseCloudRecordSync() {
+            if (!supabaseClient || !supabaseUser) return;
+            clearTimeout(supabaseCloudRecordSyncTimer);
+            supabaseCloudRecordSyncTimer = setTimeout(syncSupabaseCloudRecords, 900);
+        }
+
+        async function syncSupabaseCloudRecords() {
+            if (!supabaseClient || !supabaseUser) return;
+            ensureSyncMeta();
+            const rows = [];
+            (appData.records || []).forEach(r => {
+                if (!r || r.id == null) return;
+                rows.push({ owner_id: supabaseUser.id, entity_type: 'record', client_id: r.supabaseClientId || 'legacy-record-' + String(r.id), payload: r, is_deleted: false });
+            });
+            (appData.purchases || []).forEach(p => {
+                if (!p || p.id == null) return;
+                rows.push({ owner_id: supabaseUser.id, entity_type: 'purchase', client_id: 'purchase-' + String(p.id), payload: p, is_deleted: false });
+            });
+            (appData.rejects || []).forEach(r => {
+                if (!r || r.id == null) return;
+                rows.push({ owner_id: supabaseUser.id, entity_type: 'reject', client_id: 'reject-' + String(r.id), payload: r, is_deleted: false });
+            });
+            ['records', 'purchases', 'rejects'].forEach(kind => {
+                (appData._deletedIds[kind] || []).forEach(id => rows.push({
+                    owner_id: supabaseUser.id,
+                    entity_type: kind === 'records' ? 'record' : (kind === 'purchases' ? 'purchase' : 'reject'),
+                    client_id: (kind === 'records' ? 'legacy-record-' : kind === 'purchases' ? 'purchase-' : 'reject-') + String(id),
+                    payload: { id },
+                    is_deleted: true
+                }));
+            });
+            if (!rows.length) return;
+            try {
+                for (let i = 0; i < rows.length; i += 50) {
+                    const { error } = await supabaseClient.from('cloud_records').upsert(rows.slice(i, i + 50), { onConflict: 'owner_id,entity_type,client_id' });
+                    if (error) throw error;
+                }
+                setSupabaseStatus('✅ 全部业务数据已同步到实时数据库', true);
+            } catch (e) {
+                try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
+                setSupabaseStatus('⚠️ 部分业务数据暂未上传，本机数据已保留，网络恢复后会重试');
+            }
+        }
+
+        async function importBackupToSupabase() {
+            if (!supabaseClient || !supabaseUser) {
+                setSupabaseStatus('⚠️ 请先登录实时数据库');
+                return;
+            }
+            const input = document.getElementById('supabaseBackupFile');
+            const file = input && input.files && input.files[0];
+            if (!file) { setSupabaseStatus('⚠️ 请先选择 JSON 备份文件'); return; }
+            try {
+                setSupabaseStatus('正在导入当前库存和历史备份，请不要关闭页面...');
+                const backup = JSON.parse(await file.text());
+                const products = backup && backup.products && typeof backup.products === 'object' ? backup.products : {};
+                const rows = Object.values(products).filter(p => p && p.name).map(p => ({
+                    owner_id: supabaseUser.id,
+                    name: String(p.name),
+                    stock: Number(p.stock) || 0,
+                    cost: Number(p.cost) || 0,
+                    image_url: null
+                }));
+                if (!rows.length) throw new Error('备份中没有商品数据');
+                for (let i = 0; i < rows.length; i += 50) {
+                    const { error } = await supabaseClient.from('products').upsert(rows.slice(i, i + 50), { onConflict: 'owner_id,name' });
+                    if (error) throw error;
+                }
+                const { error: snapError } = await supabaseClient.from('legacy_snapshots').insert({
+                    owner_id: supabaseUser.id,
+                    backup_name: file.name,
+                    data: backup
+                });
+                if (snapError) throw snapError;
+                // 导入成功后同时恢复当前页面，避免只写入云端但页面仍显示旧本地数据。
+                appData = backup;
+                normalizeAppData();
+                appData.isSeed = false;
+                try {
+                    localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
+                    localStorage.removeItem('pddDirty');
+                } catch (e) {}
+                renderAllLists();
+                updateDashboard();
+                renderTodayCard();
+                await syncSupabaseCloudRecords();
+                setSupabaseStatus('✅ 导入成功：当前库存和历史数据已恢复，历史流水也已备份', true);
+            } catch (e) {
+                setSupabaseStatus('❌ 导入失败：' + (e.message || e));
+            }
+        }
+
         function utf8ToBase64(str) {
             return btoa(unescape(encodeURIComponent(str)));
         }
@@ -1555,6 +1954,7 @@
         let cachedSha = null;
         try { const s = localStorage.getItem('pddLastSha'); if (s) cachedSha = s; } catch (e) {}
         let syncBusy = false;
+        let localChangeSeq = 0;       // 本机变更序号，防止上传期间的新录入被误标记为已同步
 
         /* 推送失败后的自动重试（退避：8s → 20s → 45s → 90s → 180s）。
            旧代码推送失败只在管理页留一行小字、且不再排期 —— 一旦失败（网络抖动、上传超时、
@@ -1566,8 +1966,8 @@
         let lastSyncError = '';         // 最近一次推送失败的原因，显示在提示条上
 
         // 另一台设备改了数据后，这边多久去云端瞄一眼（只读一个几百字节的文件指纹，不变就不下载）。
-        // 60 秒：探测请求很小，加密一点频率，电脑端能更快看到手机上刚录的内容
-        const CLOUD_POLL_MS = 60000;
+        // 15 秒：探测请求很小，电脑端能更快看到手机上刚录的内容
+        const CLOUD_POLL_MS = 15000;
         let cloudPollTimer = null;
         let lastCloudSha = null;        // 最近一次确认与云端一致的文件指纹
 
@@ -1580,6 +1980,9 @@
 
         function syncConfigured() {
             return !!(ghConfig.user && ghConfig.repo && ghConfig.token);
+        }
+        function supabasePrimaryEnabled() {
+            try { return localStorage.getItem('pddSupabasePrimary') === '1'; } catch (e) { return false; }
         }
         // 同步平台：github（默认，老配置没存 platform 也算它） / gitee（国内直连快、成功率高）
         function isGitee() { return ghConfig.platform === 'gitee'; }
@@ -1919,13 +2322,13 @@
         }
 
         function scheduleAutoSync() {
-            if (!syncConfigured() || appData.isSeed) return;
+            if (supabasePrimaryEnabled() || !syncConfigured() || appData.isSeed) return;
             clearTimeout(autoSyncTimer);
             autoSyncTimer = setTimeout(autoPush, AUTO_SYNC_DELAY);
         }
 
         async function autoPush(retry) {
-            if (!syncConfigured() || appData.isSeed) return;
+            if (supabasePrimaryEnabled() || !syncConfigured() || appData.isSeed) return;
             if (syncBusy) {
                 // 正在做别的同步（例如正在拉云端）→ 稍后重试。
                 // 旧逻辑在这里直接 return，这次改动就永远不推了 ——
@@ -2091,6 +2494,11 @@
                     }
                 } catch (e) { /* 云端拉不到就按原样推，绝不因合并失败中断上传 */ }
             }
+            // 记录本次真正要上传的版本。上传期间如果用户又录入数据，序号会变化；
+            // 本次请求成功时只能确认快照版本已上传，不能把后来那笔也误标成已同步。
+            const uploadStamp = appData.updatedAt;
+            const uploadSeq = localChangeSeq;
+            const uploadClearAll = !!appData._clearAllPending;
             let sizeKb = 0;
             try {
                 const payload = JSON.stringify(appData);
@@ -2109,7 +2517,8 @@
                     body: JSON.stringify(body)
                 }, putTimeout);
                 if (putRes.status === 200 || putRes.status === 201) {
-                    lastCloudUpdatedAt = appData.updatedAt;
+                    const changedDuringUpload = localChangeSeq !== uploadSeq || appData.updatedAt !== uploadStamp;
+                    lastCloudUpdatedAt = uploadStamp;
                     lastSyncError = '';
                     // 记下这次推送后的云端文件指纹：
                     // ① 退出页面时的抢发要用它（首选通道拿不到 sha，只能靠这里缓存）
@@ -2131,15 +2540,24 @@
                     // 标记「这份数据已与云端一致」：既写小键值，也写进数据本体（appData._syncedAt，
                     // 下次保存时随数据落盘）。小键值在存储写满时反而能存活、数据本体挂了它还在 ——
                     // hasLocalChanges 靠它识别"本机是旧的、云端才是新的"，绝不能反向覆盖。
-                    const clearWasUploaded = !!appData._clearAllPending;
+                    const clearWasUploaded = uploadClearAll && !changedDuringUpload;
                     if (clearWasUploaded) delete appData._clearAllPending;
-                    appData._syncedAt = appData.updatedAt;
+                    if (!changedDuringUpload) appData._syncedAt = uploadStamp;
                     try {
-                        localStorage.setItem('pddLastSyncAt', String(appData.updatedAt));
-                        localStorage.removeItem('pddDirty');
+                        if (!changedDuringUpload) {
+                            localStorage.setItem('pddLastSyncAt', String(uploadStamp));
+                            localStorage.removeItem('pddDirty');
+                        } else {
+                            localStorage.setItem('pddDirty', '1');
+                        }
                     } catch (e) {}
                     if (clearWasUploaded) saveData(true); // 持久化“清空已成功”，避免下次打开重复执行全量覆盖
                     setSyncStatus('✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+                    if (changedDuringUpload) {
+                        setSyncStatus('✅ 已上传，正在补传刚刚的新改动...');
+                        clearTimeout(autoSyncTimer);
+                        autoSyncTimer = setTimeout(autoPush, 0);
+                    }
                     if (!silent) showToast('数据已推送到云端');
                     return true;
                 }
@@ -2174,8 +2592,10 @@
 
         function pushToGithub() {
             if (!syncConfigured()) { showToast('请先填写并保存 GitHub 配置'); return; }
+            if (syncBusy) { showToast('同步正在进行，请稍等'); return; }
             setSyncStatus('正在推送...');
-            uploadData(false);
+            syncBusy = true;
+            uploadData(false).finally(() => { syncBusy = false; });
         }
 
         // 依次尝试各条通道，谁先成功用谁；全部失败时把每条通道的结果汇总抛出来，便于定位
@@ -2304,6 +2724,7 @@
         }
 
         async function initialSync() {
+            if (supabasePrimaryEnabled()) { setSyncStatus('✅ Supabase 实时同步已启用'); return; }
             if (!syncConfigured()) { setSyncStatus('未开启同步：填写上方配置并保存后自动开启'); return; }
             if (syncBusy) {
                 // 上一次检查还没跑完（弱网下每条通道最长 12 秒），别悄悄吞掉这次调用，把状态说清楚
@@ -2605,6 +3026,7 @@
            手机端以前只在「打开页面」和「网络恢复」时查云端，页面一直开着、
            或从后台切回来都不会查，所以永远看不到另一台设备的改动。 */
         async function pollCloudOnce(force) {
+            if (supabasePrimaryEnabled()) return;
             if (!syncConfigured() || appData.isSeed || syncBusy) return;
             if (document.visibilityState !== 'visible') return;
             if (anyModalOpen()) return;                 // 正在弹窗填写时不打扰
@@ -2674,6 +3096,7 @@
         }
 
         function flushSyncOnExit() {
+            if (supabasePrimaryEnabled()) return;
             if (!syncConfigured() || appData.isSeed || syncBusy) return;
             // 没有云端文件指纹就先不发：PUT 更新已存在的文件必须带 sha，硬发只会 409 白费
             if (cachedSha === null) return;
@@ -3441,13 +3864,17 @@
         (function () {
             const el = document.getElementById('purName');
             if (!el) return;
-            el.addEventListener('change', function () {
+            const ensureProduct = function () {
                 const c = document.getElementById('purCost');
-                if (autoCreateProductFromName(this.value, c ? c.value : 0)) {
-                    const n = this.value.trim();
+                if (autoCreateProductFromName(el.value, c ? c.value : 0)) {
+                    const n = el.value.trim();
                     showToast('已自动新建商品：' + (n.length > 12 ? n.slice(0, 12) + '…' : n) + '（库存总览里可查）');
                 }
-            });
+            };
+            // change 在部分手机输入法中不会及时触发；失去焦点时再兜底一次，
+            // 确保输入新名称后不用点击「加入待收货」也会保存为 0 库存商品。
+            el.addEventListener('change', ensureProduct);
+            el.addEventListener('blur', ensureProduct);
         })();
 
         function toggleArrived(id) {
@@ -3783,10 +4210,13 @@
 
         // 静默写一条记录（批量入库时用，避免每条都弹提示）
         function addRecordSilent(type, data) {
-            appData.records.unshift(Object.assign({
+            const record = Object.assign({
                 id: genId(), type: type, timestamp: new Date().toISOString()
-            }, data));
+            }, data);
+            record.supabaseClientId = newSupabaseUuid();
+            appData.records.unshift(record);
             appData.isSeed = false;
+            setTimeout(() => syncRecordToSupabase(record), 800);
         }
 
         // 单条已收货商品转入库存，成功返回 true
@@ -5502,9 +5932,11 @@ function findByTracking(rawInput, allowFuzzy) {
                 timestamp: new Date().toISOString(),
                 ...data
             };
+            record.supabaseClientId = newSupabaseUuid();
             appData.records.unshift(record); 
             appData.isSeed = false;
             saveData();
+            setTimeout(() => syncRecordToSupabase(record), 800);
             showToast('添加成功');
             
             const forms = ['formIn', 'formOut', 'formReturn', 'formShip', 'formExpense'];
