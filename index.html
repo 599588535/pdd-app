@@ -1158,7 +1158,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-01 07';
+        const APP_BUILD = '2026-11-01 08';
         const SUPABASE_URL = 'https://fcppclegmitjdvqwjvez.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nmF7i6iPCL1pm_UxeMCMWQ_HPiv77-w';
         let supabaseClient = null;
@@ -1607,7 +1607,7 @@
                         if (email && supabaseUser.email) email.value = supabaseUser.email;
                         setSupabaseStatus('✅ 已登录实时数据库：' + (supabaseUser.email || ''), true);
                         startSupabaseRealtime();
-                        restoreSupabaseForEmptyDevice();
+                        restoreSupabaseForEmptyDevice().then(() => pullSupabaseCurrentData());
                         syncPendingSupabaseRecords();
                         scheduleSupabaseCloudRecordSync();
                     } else setSupabaseStatus('未连接 Supabase');
@@ -1630,7 +1630,7 @@
             try { localStorage.setItem('pddSupabaseEmail', email); localStorage.setItem('pddSupabasePrimary', '1'); } catch (e) {}
             setSupabaseStatus('✅ 已登录实时数据库：' + email, true);
             startSupabaseRealtime();
-            restoreSupabaseForEmptyDevice();
+            restoreSupabaseForEmptyDevice().then(() => pullSupabaseCurrentData());
             syncPendingSupabaseRecords();
             scheduleSupabaseCloudRecordSync();
         }
@@ -1678,7 +1678,7 @@
             }
         }
 
-        function applySupabaseCloudRecord(row) {
+        function applySupabaseCloudRecord(row, persist) {
             if (!row || !row.entity_type || !row.payload) return;
             const kind = row.entity_type;
             const listName = kind === 'record' ? 'records' : (kind === 'purchase' ? 'purchases' : 'rejects');
@@ -1698,9 +1698,49 @@
                 list.unshift(p);
             }
             appData.isSeed = false;
-            saveData(true);
-            renderAllLists();
-            setSupabaseStatus('✅ 已收到全部业务数据的实时更新', true);
+            if (persist !== false) {
+                saveData(true);
+                renderAllLists();
+                setSupabaseStatus('✅ 已收到全部业务数据的实时更新', true);
+            }
+        }
+
+        async function pullSupabaseCurrentData() {
+            if (!supabaseClient || !supabaseUser) return;
+            try {
+                const { data: products, error: productError } = await supabaseClient
+                    .from('products').select('name,stock,cost').eq('owner_id', supabaseUser.id);
+                if (productError) throw productError;
+                (products || []).forEach(row => {
+                    if (!row || !row.name) return;
+                    const key = String(row.name).toLowerCase();
+                    const old = appData.products[key] || { name: row.name, stock: 0, cost: 0 };
+                    old.name = row.name;
+                    old.stock = Number(row.stock) || 0;
+                    old.cost = Number(row.cost) || 0;
+                    appData.products[key] = old;
+                });
+
+                let from = 0;
+                const pageSize = 500;
+                while (true) {
+                    const { data: rows, error } = await supabaseClient
+                        .from('cloud_records').select('entity_type,client_id,payload,is_deleted,updated_at')
+                        .eq('owner_id', supabaseUser.id).range(from, from + pageSize - 1);
+                    if (error) throw error;
+                    (rows || []).forEach(row => applySupabaseCloudRecord(row, false));
+                    if (!rows || rows.length < pageSize) break;
+                    from += pageSize;
+                }
+                appData.isSeed = false;
+                saveData(true);
+                renderAllLists();
+                updateDashboard();
+                renderTodayCard();
+                setSupabaseStatus('✅ 已拉取 Supabase 最新数据', true);
+            } catch (e) {
+                setSupabaseStatus('⚠️ 云端最新数据拉取失败：' + (e.message || e));
+            }
         }
 
         function startSupabaseRealtime() {
