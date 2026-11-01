@@ -1158,12 +1158,13 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-01 08';
+        const APP_BUILD = '2026-11-01 10';
         const SUPABASE_URL = 'https://fcppclegmitjdvqwjvez.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nmF7i6iPCL1pm_UxeMCMWQ_HPiv77-w';
         let supabaseClient = null;
         let supabaseUser = null;
         let supabaseRealtimeChannel = null;
+        let supabaseProductSyncOk = true;
         let supabaseProductSyncTimer = null;
         let supabaseCloudRecordSyncTimer = null;
 
@@ -1200,6 +1201,19 @@
             ['records', 'purchases', 'rejects'].forEach(k => {
                 if (!Array.isArray(appData._deletedIds[k])) appData._deletedIds[k] = [];
             });
+            if (!Array.isArray(appData._deletedProducts)) appData._deletedProducts = [];
+        }
+
+        function markProductDeleted(name) {
+            ensureSyncMeta();
+            const key = String(name || '').toLowerCase();
+            if (key && !appData._deletedProducts.some(x => String(x).toLowerCase() === key)) appData._deletedProducts.push(key);
+        }
+
+        function isProductDeleted(name) {
+            ensureSyncMeta();
+            const key = String(name || '').toLowerCase();
+            return !!key && appData._deletedProducts.some(x => String(x).toLowerCase() === key);
         }
 
         function markDeleted(kind, id) {
@@ -1433,8 +1447,11 @@
             }
             if (!appData.deviceId) appData.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
             ensureSyncMeta();
+            // 商品重新创建后，撤销同名商品的删除标记，避免新商品被同步任务再次删掉。
+            appData._deletedProducts = appData._deletedProducts.filter(k => !appData.products[String(k).toLowerCase()]);
             if (!keepStamp) {
                 try { localStorage.setItem('pddDirty', '1'); } catch (e) {}
+                try { if (supabasePrimaryEnabled()) localStorage.setItem('pddSupabaseDirty', '1'); } catch (e) {}
             }
             // 0 库存商品：库存变 0 时开始计时，连续 7 天没库存就自动清理（历史流水保留）
             try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
@@ -1607,7 +1624,7 @@
                         if (email && supabaseUser.email) email.value = supabaseUser.email;
                         setSupabaseStatus('✅ 已登录实时数据库：' + (supabaseUser.email || ''), true);
                         startSupabaseRealtime();
-                        restoreSupabaseForEmptyDevice().then(() => pullSupabaseCurrentData());
+                        restoreSupabaseForEmptyDevice().then(() => prepareSupabaseBeforePull());
                         syncPendingSupabaseRecords();
                         scheduleSupabaseCloudRecordSync();
                     } else setSupabaseStatus('未连接 Supabase');
@@ -1630,7 +1647,7 @@
             try { localStorage.setItem('pddSupabaseEmail', email); localStorage.setItem('pddSupabasePrimary', '1'); } catch (e) {}
             setSupabaseStatus('✅ 已登录实时数据库：' + email, true);
             startSupabaseRealtime();
-            restoreSupabaseForEmptyDevice().then(() => pullSupabaseCurrentData());
+            restoreSupabaseForEmptyDevice().then(() => prepareSupabaseBeforePull());
             syncPendingSupabaseRecords();
             scheduleSupabaseCloudRecordSync();
         }
@@ -1678,6 +1695,21 @@
             }
         }
 
+        async function prepareSupabaseBeforePull() {
+            // 登录后先处理本机尚未上传的改动，避免网络恢复时用云端旧快照覆盖刚录入的数据。
+            let dirty = false;
+            try { dirty = localStorage.getItem('pddSupabaseDirty') === '1' || localStorage.getItem('pddDirty') === '1'; } catch (e) {}
+            if (dirty) {
+                try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e) {}
+                await syncPendingSupabaseRecords();
+                await syncSupabaseProducts();
+                await syncSupabaseCloudRecords();
+            }
+            await pullSupabaseCurrentData(dirty);
+            scheduleSupabaseProductSync();
+            scheduleSupabaseCloudRecordSync();
+        }
+
         function applySupabaseCloudRecord(row, persist) {
             if (!row || !row.entity_type || !row.payload) return;
             const kind = row.entity_type;
@@ -1705,7 +1737,7 @@
             }
         }
 
-        async function pullSupabaseCurrentData() {
+        async function pullSupabaseCurrentData(preserveLocalProducts) {
             if (!supabaseClient || !supabaseUser) return;
             try {
                 const { data: products, error: productError } = await supabaseClient
@@ -1713,6 +1745,7 @@
                 if (productError) throw productError;
                 (products || []).forEach(row => {
                     if (!row || !row.name) return;
+                    if (preserveLocalProducts || isProductDeleted(row.name)) return;
                     const key = String(row.name).toLowerCase();
                     const old = appData.products[key] || { name: row.name, stock: 0, cost: 0 };
                     old.name = row.name;
@@ -1753,10 +1786,13 @@
                     event: '*', schema: 'public', table: 'products',
                     filter: 'owner_id=eq.' + supabaseUser.id
                 }, payload => {
-                    const row = payload && payload.new;
+                    const row = payload && (payload.new || payload.old);
                     if (!row || !row.name) return;
                     const key = String(row.name).toLowerCase();
-                    if (payload.eventType === 'DELETE') delete appData.products[key];
+                    if (payload.eventType === 'DELETE') {
+                        delete appData.products[key];
+                        markProductDeleted(row.name);
+                    }
                     else {
                         const old = appData.products[key] || { name: row.name, stock: 0, cost: 0 };
                         old.name = row.name;
@@ -1856,14 +1892,26 @@
             supabaseProductSyncTimer = setTimeout(syncSupabaseProducts, 700);
         }
 
-        function syncPendingSupabaseRecords() {
+        async function deleteSupabaseProduct(name) {
+            if (!supabaseClient || !supabaseUser || !name) return;
+            try {
+                const { error } = await supabaseClient.from('products')
+                    .delete().eq('owner_id', supabaseUser.id).eq('name', String(name));
+                if (error) throw error;
+            } catch (e) {
+                setSupabaseStatus('⚠️ 商品已从本机删除，但云端删除稍后重试');
+            }
+        }
+
+        async function syncPendingSupabaseRecords() {
             if (!supabaseClient || !supabaseUser) return;
-            (appData.records || []).filter(r => r && r.supabaseClientId && ['in', 'out', 'return'].includes(r.type))
-                .slice(0, 100).forEach((r, i) => setTimeout(() => syncRecordToSupabase(r), i * 120));
+            const list = (appData.records || []).filter(r => r && r.supabaseClientId && ['in', 'out', 'return'].includes(r.type)).slice(0, 100);
+            for (const r of list) await syncRecordToSupabase(r);
         }
 
         async function syncSupabaseProducts() {
             if (!supabaseClient || !supabaseUser) return;
+            supabaseProductSyncOk = false;
             const rows = Object.values(appData.products || {}).filter(p => p && p.name).map(p => ({
                 owner_id: supabaseUser.id,
                 name: String(p.name),
@@ -1871,13 +1919,19 @@
                 cost: Number(p.cost) || 0,
                 image_url: null
             }));
-            if (!rows.length) return;
+            if (!rows.length) { supabaseProductSyncOk = true; return; }
             try {
                 for (let i = 0; i < rows.length; i += 50) {
                     const { error } = await supabaseClient.from('products').upsert(rows.slice(i, i + 50), { onConflict: 'owner_id,name' });
                     if (error) throw error;
                 }
-                try { localStorage.removeItem('pddSupabaseDirty'); } catch (e) {}
+                // 删除标记单独处理，避免“本机删掉后 saveData 又把旧商品 upsert 回来”。
+                const deleted = (appData._deletedProducts || []).map(k => String(k));
+                for (const key of deleted) {
+                    const { error } = await supabaseClient.from('products').delete().eq('owner_id', supabaseUser.id).ilike('name', key);
+                    if (error) throw error;
+                }
+                supabaseProductSyncOk = true;
                 setSupabaseStatus('✅ 库存已同步到实时数据库', true);
             } catch (e) {
                 try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
@@ -1922,6 +1976,9 @@
                     const { error } = await supabaseClient.from('cloud_records').upsert(rows.slice(i, i + 50), { onConflict: 'owner_id,entity_type,client_id' });
                     if (error) throw error;
                 }
+                if (supabaseProductSyncOk) {
+                    try { localStorage.removeItem('pddSupabaseDirty'); } catch (e) {}
+                }
                 setSupabaseStatus('✅ 全部业务数据已同步到实时数据库', true);
             } catch (e) {
                 try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
@@ -1949,16 +2006,36 @@
                     image_url: null
                 }));
                 if (!rows.length) throw new Error('备份中没有商品数据');
+                // 导入选择的是“当前备份为准”：先清理云端已不存在的商品和业务快照，
+                // 否则旧设备/旧流水会在下一次拉取时重新混回来。
+                const backupNames = new Set(rows.map(r => String(r.name).toLowerCase()));
+                const { data: cloudProducts, error: cloudProductsError } = await supabaseClient
+                    .from('products').select('name').eq('owner_id', supabaseUser.id);
+                if (cloudProductsError) throw cloudProductsError;
+                for (const cp of (cloudProducts || [])) {
+                    if (cp && cp.name && !backupNames.has(String(cp.name).toLowerCase())) {
+                        const { error } = await supabaseClient.from('products').delete()
+                            .eq('owner_id', supabaseUser.id).eq('name', cp.name);
+                        if (error) throw error;
+                    }
+                }
+                const { error: clearCloudError } = await supabaseClient.from('cloud_records')
+                    .delete().eq('owner_id', supabaseUser.id);
+                if (clearCloudError) throw clearCloudError;
                 for (let i = 0; i < rows.length; i += 50) {
                     const { error } = await supabaseClient.from('products').upsert(rows.slice(i, i + 50), { onConflict: 'owner_id,name' });
                     if (error) throw error;
                 }
-                const { error: snapError } = await supabaseClient.from('legacy_snapshots').insert({
-                    owner_id: supabaseUser.id,
-                    backup_name: file.name,
-                    data: backup
-                });
-                if (snapError) throw snapError;
+                // 同一个备份文件重复导入时更新原快照，不再无限生成重复备份。
+                const snapPayload = { owner_id: supabaseUser.id, backup_name: file.name, data: backup };
+                const { data: oldSnap, error: findSnapError } = await supabaseClient
+                    .from('legacy_snapshots').select('id').eq('owner_id', supabaseUser.id)
+                    .eq('backup_name', file.name).order('imported_at', { ascending: false }).limit(1).maybeSingle();
+                if (findSnapError) throw findSnapError;
+                const snapResult = oldSnap && oldSnap.id
+                    ? await supabaseClient.from('legacy_snapshots').update({ data: backup, imported_at: new Date().toISOString() }).eq('id', oldSnap.id)
+                    : await supabaseClient.from('legacy_snapshots').insert(snapPayload);
+                if (snapResult.error) throw snapResult.error;
                 // 导入成功后同时恢复当前页面，避免只写入云端但页面仍显示旧本地数据。
                 appData = backup;
                 normalizeAppData();
@@ -3330,8 +3407,10 @@
             if (!p) return;
             if (!confirm('确定删除商品「' + p.name + '」吗？\n\n· 将清除该商品库存（列表移除、无法再出单）\n· 之前的销售/入库历史记录会保留')) return;
             delete appData.products[key];
+            markProductDeleted(p.name);
             appData.isSeed = false;
             saveData();
+            deleteSupabaseProduct(p.name);
             renderAllLists();
             showToast('商品已删除（历史记录保留）');
         }
