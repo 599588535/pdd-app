@@ -1158,7 +1158,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-01 11';
+        const APP_BUILD = '2026-11-02 12';
         const SUPABASE_URL = 'https://fcppclegmitjdvqwjvez.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nmF7i6iPCL1pm_UxeMCMWQ_HPiv77-w';
         let supabaseClient = null;
@@ -1945,6 +1945,13 @@
             if (!supabaseClient || !supabaseUser) return;
             clearTimeout(supabaseCloudRecordSyncTimer);
             supabaseCloudRecordSyncTimer = setTimeout(syncSupabaseCloudRecords, 900);
+        }
+
+        // 关键采购状态立即上传，避免库存流水先成功而采购单 stocked 状态仍滞留在本机。
+        async function syncSupabaseCloudNow() {
+            if (!supabaseClient || !supabaseUser || !supabasePrimaryEnabled()) return;
+            clearTimeout(supabaseCloudRecordSyncTimer);
+            await syncSupabaseCloudRecords();
         }
 
         async function syncSupabaseCloudRecords() {
@@ -4021,6 +4028,7 @@
             if (p.arrived) p.arrivedAt = new Date().toISOString();
             saveData();
             renderPurchases();
+            syncSupabaseCloudNow();
         }
 
         function delPurchase(id) {
@@ -4055,6 +4063,7 @@
                 saveData();
                 showToast('已入库: ' + p.name + ' × ' + p.qty);
                 renderPurchases();
+                syncSupabaseCloudNow();
             } else {
                 saveData();
                 switchInMode('unit');
@@ -4477,6 +4486,7 @@ function findByTracking(rawInput, allowFuzzy) {
 
             saveData();
             renderAllLists();
+            syncSupabaseCloudNow();
             playBeep(true); vibrate(60);
             const names = todo.map(p => p.name + ' ×' + p.qty).join('、');
             // 扫码值带件序号（-1-1）时说明匹配到了哪个已录单号，让用户心里有数
@@ -4502,6 +4512,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 const now = new Date().toISOString();
                 un.forEach(p => { p.arrived = true; p.arrivedAt = now; });
                 saveData(); renderPurchases();
+                syncSupabaseCloudNow();
                 showToast('✅ 整单签收 ' + un.length + ' 件');
                 return;
             }
@@ -4524,6 +4535,7 @@ function findByTracking(rawInput, allowFuzzy) {
             items.forEach(p => { if (stockOnePurchase(p)) { n++; p.stocked = true; p.stockedAt = now; } });
             saveData(); renderAllLists();
             showToast('✅ 已入库 ' + n + ' 件');
+            syncSupabaseCloudNow();
         }
 
         function markAllArrived() {
@@ -4533,6 +4545,7 @@ function findByTracking(rawInput, allowFuzzy) {
             const now = new Date().toISOString();
             un.forEach(p => { p.arrived = true; p.arrivedAt = now; });
             saveData(); renderPurchases();
+            syncSupabaseCloudNow();
             showToast('✅ 已标记 ' + un.length + ' 件');
         }
 
@@ -4550,6 +4563,7 @@ function findByTracking(rawInput, allowFuzzy) {
             ok.forEach(p => { if (stockOnePurchase(p)) { p.stocked = true; p.stockedAt = now; cnt++; } });
             saveData(); renderAllLists();
             showToast('✅ 已入库 ' + cnt + ' 件');
+            syncSupabaseCloudNow();
         }
 
         /* ==================== 摄像头扫码 ==================== */
