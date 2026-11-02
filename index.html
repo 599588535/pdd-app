@@ -1158,7 +1158,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-02 12';
+        const APP_BUILD = '2026-11-02 13';
         const SUPABASE_URL = 'https://fcppclegmitjdvqwjvez.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nmF7i6iPCL1pm_UxeMCMWQ_HPiv77-w';
         let supabaseClient = null;
@@ -1203,6 +1203,10 @@
                 if (!Array.isArray(appData._deletedIds[k])) appData._deletedIds[k] = [];
             });
             if (!Array.isArray(appData._deletedProducts)) appData._deletedProducts = [];
+            if (!appData._deletedClientIds || typeof appData._deletedClientIds !== 'object') appData._deletedClientIds = {};
+            ['records', 'purchases', 'rejects'].forEach(k => {
+                if (!appData._deletedClientIds[k] || typeof appData._deletedClientIds[k] !== 'object') appData._deletedClientIds[k] = {};
+            });
         }
 
         function markProductDeleted(name) {
@@ -1717,6 +1721,8 @@
             const listName = kind === 'record' ? 'records' : (kind === 'purchase' ? 'purchases' : 'rejects');
             const list = Array.isArray(appData[listName]) ? appData[listName] : (appData[listName] = []);
             const p = row.payload;
+            // 本机已经明确删除的旧记录，即使云端旧版本稍后到达，也不能再次补回。
+            if (!row.is_deleted && wasDeleted(listName, p.id)) return;
             const idx = list.findIndex(x => x && (
                 String(x.id) === String(p.id) || String(x.supabaseClientId || '') === String(row.client_id)
             ));
@@ -1971,13 +1977,18 @@
                 rows.push({ owner_id: supabaseUser.id, entity_type: 'reject', client_id: 'reject-' + String(r.id), payload: r, is_deleted: false });
             });
             ['records', 'purchases', 'rejects'].forEach(kind => {
-                (appData._deletedIds[kind] || []).forEach(id => rows.push({
+                (appData._deletedIds[kind] || []).forEach(id => {
+                    const mapped = appData._deletedClientIds && appData._deletedClientIds[kind]
+                        ? appData._deletedClientIds[kind][String(id)] : '';
+                    const prefix = kind === 'records' ? 'legacy-record-' : kind === 'purchases' ? 'purchase-' : 'reject-';
+                    rows.push({
                     owner_id: supabaseUser.id,
                     entity_type: kind === 'records' ? 'record' : (kind === 'purchases' ? 'purchase' : 'reject'),
-                    client_id: (kind === 'records' ? 'legacy-record-' : kind === 'purchases' ? 'purchase-' : 'reject-') + String(id),
+                    client_id: mapped || prefix + String(id),
                     payload: { id },
                     is_deleted: true
-                }));
+                    });
+                });
             });
             if (!rows.length) return;
             try {
@@ -3457,6 +3468,8 @@
             const index = appData.records.findIndex(r => String(r.id) === String(id));
             if (index === -1) return;
             const record = appData.records[index];
+            ensureSyncMeta();
+            if (record.supabaseClientId) appData._deletedClientIds.records[String(record.id)] = record.supabaseClientId;
             markDeleted('records', record.id);
             const productName = record.name;
             // 商品的 key 一律是小写名（name.toLowerCase()），直接用原始名查会漏掉带大写字母的商品
@@ -5721,7 +5734,11 @@ function findByTracking(rawInput, allowFuzzy) {
         function clearAllData() {
             if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
             if (!confirm('再次确认：所有商品与记录都会被删除！建议先"备份JSON"或导出CSV。\n（若已开启云同步，清空结果也会同步到云端）')) return;
-            (appData.records || []).forEach(r => markDeleted('records', r.id));
+            ensureSyncMeta();
+            (appData.records || []).forEach(r => {
+                if (r && r.supabaseClientId) appData._deletedClientIds.records[String(r.id)] = r.supabaseClientId;
+                markDeleted('records', r.id);
+            });
             (appData.purchases || []).forEach(p => markDeleted('purchases', p.id));
             (appData.rejects || []).forEach(r => markDeleted('rejects', r.id));
             appData.products = {};
