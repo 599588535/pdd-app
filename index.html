@@ -1158,7 +1158,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-02 14';
+        const APP_BUILD = '2026-11-02 15';
         const SUPABASE_URL = 'https://fcppclegmitjdvqwjvez.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_nmF7i6iPCL1pm_UxeMCMWQ_HPiv77-w';
         let supabaseClient = null;
@@ -1954,9 +1954,32 @@
         }
 
         // 关键采购状态立即上传，避免库存流水先成功而采购单 stocked 状态仍滞留在本机。
-        async function syncSupabaseCloudNow() {
+        async function syncSupabasePurchaseState(purchase) {
+            if (!supabaseClient || !supabaseUser || !purchase || purchase.id == null) return false;
+            const row = {
+                owner_id: supabaseUser.id,
+                entity_type: 'purchase',
+                client_id: 'purchase-' + String(purchase.id),
+                payload: purchase,
+                is_deleted: false
+            };
+            try {
+                const { error } = await supabaseClient.from('cloud_records').upsert([row], {
+                    onConflict: 'owner_id,entity_type,client_id'
+                });
+                if (error) throw error;
+                return true;
+            } catch (e) {
+                try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
+                setSupabaseStatus('❌ 采购单状态未上传：' + (e.message || e), false);
+                return false;
+            }
+        }
+
+        async function syncSupabaseCloudNow(purchase) {
             if (!supabaseClient || !supabaseUser || !supabasePrimaryEnabled()) return;
             clearTimeout(supabaseCloudRecordSyncTimer);
+            if (purchase) await syncSupabasePurchaseState(purchase);
             await syncSupabaseCloudRecords();
         }
 
@@ -1967,6 +1990,7 @@
             // 采购状态是单向推进的：旧设备的“待入库”不能覆盖另一台设备刚完成的“已入库”。
             // 上传前先读取云端采购状态，合并时以进度更靠后的状态为准。
             const remotePurchases = {};
+            let remoteCheckFailed = false;
             try {
                 const { data: remoteRows, error: remoteError } = await supabaseClient
                     .from('cloud_records').select('client_id,payload,is_deleted')
@@ -1976,10 +2000,9 @@
                     if (row && row.payload && !row.is_deleted) remotePurchases[String(row.client_id)] = row.payload;
                 });
             } catch (e) {
-                // 拉取失败时仍保留原有重试机制，但不冒险用本机旧状态覆盖云端。
-                try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
-                setSupabaseStatus('⚠️ 采购状态校验失败，已保留本机数据，稍后重试');
-                return;
+                // 查询失败不阻断独立的采购状态 upsert；如果 upsert 也被策略拒绝，
+                // 下面会把具体错误显示出来，便于修正 Supabase RLS。
+                remoteCheckFailed = true;
             }
             const purchaseRank = p => p && p.stocked ? 2 : (p && p.arrived ? 1 : 0);
             (appData.records || []).forEach(r => {
@@ -2027,10 +2050,12 @@
                         localStorage.removeItem('pddSupabaseDirty');
                     } catch (e) {}
                 }
-                setSupabaseStatus('✅ 全部业务数据已同步到实时数据库', true);
+                setSupabaseStatus(remoteCheckFailed
+                    ? '⚠️ 业务数据已尝试上传，但云端采购状态校验失败，请查看错误提示'
+                    : '✅ 全部业务数据已同步到实时数据库', !remoteCheckFailed);
             } catch (e) {
                 try { localStorage.setItem('pddSupabaseDirty', '1'); } catch (e2) {}
-                setSupabaseStatus('⚠️ 部分业务数据暂未上传，本机数据已保留，网络恢复后会重试');
+                setSupabaseStatus('❌ 业务数据上传失败：' + (e.message || e), false);
             }
         }
 
@@ -4102,7 +4127,7 @@
                 saveData();
                 showToast('已入库: ' + p.name + ' × ' + p.qty);
                 renderPurchases();
-                syncSupabaseCloudNow();
+                syncSupabaseCloudNow(p);
             } else {
                 saveData();
                 switchInMode('unit');
