@@ -256,6 +256,35 @@
         .desktop-only { display: none; }
         .side-nav { display: none; }
 
+        /* 手机端专属卡片（电脑端隐藏） */
+        .mobile-only { display: block; }
+
+        /* ===== 手机首页 · 数据同步快速按钮 ===== */
+        .msync-card { border: 1px solid #d9e8fb; background: linear-gradient(180deg, #f7fbff, #ffffff); }
+        .msync-card .card-header { border-left-color: var(--info); }
+        .msync-row { display: flex; gap: 10px; }
+        .msync-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 6px; border-radius: 10px; border: 1px solid #cfe0f5; background: #fff; color: #2b6cb0; font-size: 0.86rem; font-weight: bold; cursor: pointer; }
+        .msync-btn .msync-ico { font-size: 1.35rem; line-height: 1; }
+        .msync-btn .msync-sub { font-size: 0.66rem; color: #8a94a6; font-weight: normal; }
+        .msync-btn:active { background: #eef6ff; }
+        .msync-btn.up { border-color: #cfe9d8; color: #1f8a4c; }
+        .msync-btn.up:active { background: #f0fbf4; }
+        .msync-status { margin-top: 8px; font-size: 0.74rem; color: #7a8296; text-align: center; line-height: 1.5; }
+
+        /* 底部导航加到 8 项后，手机上缩小一点字号，避免挤 */
+        @media (max-width: 767px) {
+            .bottom-nav { padding: 6px 0; }
+            .bottom-nav .nav-item { font-size: 0.6rem; }
+            .bottom-nav .nav-icon { font-size: 1.1rem; margin-bottom: 1px; }
+        }
+
+        /* ===== 库存管理 · 顶部汇总条 ===== */
+        .stock-sum-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 12px; }
+        .stock-sum-bar .ssb-item { background: #f7f9fc; border: 1px solid #e8edf3; border-radius: 6px; padding: 5px 10px; font-size: 0.74rem; color: #7a8296; }
+        .stock-sum-bar .ssb-item b { color: var(--text-main); font-size: 0.86rem; margin-right: 3px; }
+        .stock-sum-bar .ssb-item.zero { background: #fff5f6; border-color: #ffd6da; color: #c62828; }
+        .stock-sum-bar .ssb-item.zero b { color: var(--danger); }
+
         /* ==================== 电脑端工作台布局（≥768px） ==================== */
         @media (min-width: 768px) {
             body { padding-bottom: 0; }
@@ -291,6 +320,7 @@
             .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
             .span-2 { grid-column: span 2; }
             .desktop-only { display: block; }
+            .mobile-only { display: none !important; }
             #page-home.active { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
             /* 电脑端出单页：历史紧跟出单表单，拒收件独占右列，避免历史被右侧长列表顶到页面底部。 */
             #page-out.active { grid-template-areas: "out-form out-reject" "out-history out-reject"; }
@@ -326,6 +356,13 @@
         .scan-hint b { color: #555; }
         .scan-opt { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #666; margin-top: 8px; cursor: pointer; }
         .scan-opt input { width: auto; }
+
+        /* 输入框内联的小扫码按钮（录入订单号时用） */
+        .field-scan-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+        .btn-mini-scan { padding: 4px 10px; font-size: 0.72rem; border-radius: 20px; border: 1px solid #cfd8e3; background: #fff; color: #3d6ea8; cursor: pointer; white-space: nowrap; }
+        .btn-mini-scan:active { background: #eef6ff; }
+        .btn-mini-scan.grey { color: #6b7280; border-color: #e2e6ec; }
+        .field-scan-tip { font-size: 0.68rem; color: #9aa3b2; }
 
         #scanResult { display: none; margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: #fff; border: 1px solid #eee; font-size: 0.8rem; font-weight: bold; line-height: 1.5; word-break: break-all; }
 
@@ -457,6 +494,24 @@
                 <div id="todayBox" class="today-grid" data-page-node-id="todayCard03"></div>
             </div>
 
+            <!-- 手机端：数据同步（下载 / 上传）—— 电脑端隐藏，电脑端用下面「快捷操作」里的同步按钮 -->
+            <div class="card msync-card mobile-only" data-page-node-id="mSyncCard01">
+                <div class="card-header" style="font-size: 1rem;" data-page-node-id="mSyncCard02">☁️ 数据同步 <span style="font-size:0.72rem; color:#999; font-weight:normal;" data-page-node-id="mSyncCard03">（手机 ⇄ 电脑）</span></div>
+                <div class="msync-row" data-page-node-id="mSyncCard04">
+                    <button type="button" class="msync-btn" onclick="pullFromGithub()" data-page-node-id="mSyncCard05">
+                        <span class="msync-ico" data-page-node-id="mSyncCard06">⬇️</span>
+                        下载数据
+                        <span class="msync-sub" data-page-node-id="mSyncCard07">换设备/开工前拉最新</span>
+                    </button>
+                    <button type="button" class="msync-btn up" onclick="pushToGithub()" data-page-node-id="mSyncCard08">
+                        <span class="msync-ico" data-page-node-id="mSyncCard09">⬆️</span>
+                        上传数据
+                        <span class="msync-sub" data-page-node-id="mSyncCard10">录完单据后推上去</span>
+                    </button>
+                </div>
+                <div class="msync-status" id="mSyncStatus" data-page-node-id="mSyncCard11">💡 手动同步：改完数据点「上传数据」；换手机前先点「下载数据」（重复下载不会丢本机记录）</div>
+            </div>
+
             <div class="card" data-page-node-id="6jhSTXtnV6CtQeHIXL1MUk">
                 <div class="card-header" data-page-node-id="3BYqOvqyeR2wMOFk2eCrRq">
                     <span data-page-node-id="xm0GCTkyRvr7CJXy2iJsU4">最近记录</span>
@@ -477,6 +532,7 @@
                 <div class="quick-grid" data-page-node-id="iIpdcqkpQKR1tV3vzJXUD4">
                     <div class="quick-btn" onclick="quickGo('in')" data-page-node-id="rMqprZXC2RPicAnwVdlC9P">📦<span data-page-node-id="qqe7VCh26H0XoRkhA4zZKs">记入库</span></div>
                     <div class="quick-btn" onclick="quickGo('out')" data-page-node-id="XCzlczXcNAVS5wIEF8JoXC">🛒<span data-page-node-id="AGg8Uo7zigeu5fjcPTpf3K">记出单</span></div>
+                    <div class="quick-btn" onclick="quickGo('stock')" data-page-node-id="quickStock01">📦<span data-page-node-id="quickStock02">看库存</span></div>
                     <div class="quick-btn" onclick="quickGo('return')" data-page-node-id="JIB2tXIvZOUw3UYDsUqAcC">🔄<span data-page-node-id="rxE049Gb3xPVsgMpLeOO2R">记退货</span></div>
                     <div class="quick-btn" onclick="quickGo('ship')" data-page-node-id="XB43fJomWmw1WRnXQkkwJl">💰<span data-page-node-id="EPJwEbR7EWBTpyU6TRviko">记费用</span></div>
                     <div class="quick-btn" onclick="quickGo('stats')" data-page-node-id="JIUOmJkPl9PZFkaPJAHiDI">📈<span data-page-node-id="XLmaiTudE4l569Q8m1JDZB">看统计</span></div>
@@ -493,6 +549,22 @@
         </div>
 
         <div id="page-in" class="page" data-page-node-id="Tpn80suDJiODD5xaEanKjW">
+            <!-- 收快递扫码（放在最上面：到货签收是每天最高频的动作） -->
+            <div class="card span-2" data-page-node-id="scanCardTop">
+                <div class="card-header" style="border-left-color: var(--info);" data-page-node-id="scanCardTop02">📷 扫码收快递 <span style="font-size:0.72rem; color:#999; font-weight:normal;" data-page-node-id="scanCardTop03">（扫面单订单号 → 自动标记已收货）</span></div>
+                <div class="scan-box" style="margin-top: 0;" data-page-node-id="zxDZx4hvVy9rb2mL5OG6L5">
+                    <div class="scan-row" data-page-node-id="RMqkPIm3KFLKHntuAvT1KR">
+                        <input type="text" id="scanInput" placeholder="扫面单上的订单号条码 → 自动标记已收货" autocomplete="off" data-page-node-id="LQVMhvTm72Wy2iB4q8HTED">
+                        <button type="button" class="btn-scan" onclick="startCameraScan()" data-page-node-id="vov0t1Q0W5jCmISTJ56zxM">📷 扫</button>
+                        <button type="button" class="btn-scan" style="background: var(--text-sub);" onclick="startImageScan()" data-page-node-id="jyd8jetDx1uLoa75gD0sRq">🖼️ 选图</button>
+                    </div>
+                    <input type="file" id="scanFile" accept="image/*" capture="environment" style="display:none;" data-page-node-id="3gycywXLp73rQEKERaDztX">
+                    <div id="scanResult" data-page-node-id="pDEWrdp2zGorYECsEgdC37"></div>
+                    <label class="scan-opt" data-page-node-id="K7othEZM68GQrqDVVo5z9p"><input type="checkbox" id="autoStockOnScan" data-page-node-id="Uel8hD7gDlrR0k6HsOBB2F"> 核销后自动入库（需已填进货单价）</label>
+                    <div class="scan-hint" data-page-node-id="cvPJAtxvNVXW5pVmXjNHW7">💡 录待收货时把面单上的<b>订单号（16 位纯数字）</b>填进「订单号」栏即可。收快递时用扫码枪 / 「📷 扫」摄像头 / 「🖼️ 选图」扫面单上的<b>订单号条码</b>，扫到即自动把对应商品标记为「✅ 已收货」，不用再手点。<br>📦 兼容性：面单条码上带的 <b>JD 前缀</b>、尾部件序号（<b>-1-1 / -2-3</b>）都会自动忽略；没填快递单号的记录，靠订单号也能对上。一票多件扫任意一个包裹都会整单核销。</div>
+                </div>
+            </div>
+
             <div class="card" data-page-node-id="ePR1LnAq1cLbQu8L2s9uua">
                 <div class="card-header" data-page-node-id="ODhrAK4VfSNEmn096ERRIJ">📋 采购待收货 <span id="purchaseProgress" style="font-size: 0.8rem; color: #999; font-weight: normal;" data-page-node-id="1zssFFJI2uC5219jl4gNBG"></span></div>
                 <div class="sync-status" style="margin: -8px 0 12px; text-align: left;" data-page-node-id="ueGk1QV6zBzBzFW8AA0Qzt">💡 网购下单后先记在这里，到货一件勾一件，全部到货后点"入库"转入库存</div>
@@ -525,8 +597,13 @@
                     </div>
                     <div style="display: flex; gap: 10px;" data-page-node-id="XtXHgOGnGQZnGvZcnCJhpH">
                         <div class="form-group" style="flex: 1;" data-page-node-id="Z4dYLsqgCTZdVOEBiY1WLn">
-                            <label data-page-node-id="hKqK6y0nFhtSSzEN8ckUJQ">订单号 (选填)</label>
-                            <input type="text" id="purOrder" placeholder="例如：JD12345678" data-page-node-id="nHcRl5aPx20dSnJEDqEYBz">
+                            <label data-page-node-id="hKqK6y0nFhtSSzEN8ckUJQ">订单号（16 位纯数字 · 扫码自动核销）</label>
+                            <input type="text" id="purOrder" inputmode="numeric" placeholder="例如：3658286101726292" data-page-node-id="nHcRl5aPx20dSnJEDqEYBz">
+                            <div class="field-scan-row" data-page-node-id="orderScanRow01">
+                                <button type="button" class="btn-mini-scan" onclick="scanIntoField('purOrder')" data-page-node-id="orderScanBtn01">📷 扫面单</button>
+                                <button type="button" class="btn-mini-scan grey" onclick="scanIntoFieldByImage('purOrder')" data-page-node-id="orderScanBtn02">🖼️ 选图</button>
+                                <span class="field-scan-tip" data-page-node-id="orderScanTip01">扫一下就自动填好 16 位订单号</span>
+                            </div>
                         </div>
                         <div class="form-group" style="flex: 1;" data-page-node-id="615Fs9CyUyDR03QGIDzTBh">
                             <label data-page-node-id="nR3D7o9dldfYNG9Bczh3HS">快递公司 (选填)</label>
@@ -534,8 +611,8 @@
                         </div>
                     </div>
                     <div class="form-group" data-page-node-id="qaqICDc9rodpHRa1Ht7fm1">
-                        <label data-page-node-id="JHTC8BVqFXZHK72bdccLCA">快递单号 (选填 · 用于扫码核销)</label>
-                        <input type="text" id="purTracking" placeholder="签收时扫一下即自动核销（面单上的 -1-1 不用填）" data-page-node-id="ozgFDkrHAZ25H3buAMwz54">
+                        <label data-page-node-id="JHTC8BVqFXZHK72bdccLCA">快递单号（选填 · 扫面单也能核销）</label>
+                        <input type="text" id="purTracking" placeholder="不填也行：扫面单上的订单号条码即可（-1-1 不用填）" data-page-node-id="ozgFDkrHAZ25H3buAMwz54">
                     </div>
                     <div class="form-group" data-page-node-id="dQs8vF0SC8OmWORD1tTLin">
                         <label data-page-node-id="6CMvvAyA3qF06buqJcPNsh">备注 (店铺/其他)</label>
@@ -548,18 +625,6 @@
                     <button type="submit" class="btn btn-outline" style="margin-top: 0;" data-page-node-id="M2UC4Z6FFh99EhPhbpCuW5">➕ 加入待收货</button>
                 </form>
 
-                <div class="scan-box" data-page-node-id="zxDZx4hvVy9rb2mL5OG6L5">
-                    <div class="scan-title" data-page-node-id="UHSD91GuyDC8jAvbsDs5yE">📷 扫码签收核销</div>
-                    <div class="scan-row" data-page-node-id="RMqkPIm3KFLKHntuAvT1KR">
-                        <input type="text" id="scanInput" placeholder="扫快递单号 / 手动输入后回车" autocomplete="off" data-page-node-id="LQVMhvTm72Wy2iB4q8HTED">
-                        <button type="button" class="btn-scan" onclick="startCameraScan()" data-page-node-id="vov0t1Q0W5jCmISTJ56zxM">📷 扫</button>
-                        <button type="button" class="btn-scan" style="background: var(--text-sub);" onclick="startImageScan()" data-page-node-id="jyd8jetDx1uLoa75gD0sRq">🖼️ 选图</button>
-                    </div>
-                    <input type="file" id="scanFile" accept="image/*" capture="environment" style="display:none;" data-page-node-id="3gycywXLp73rQEKERaDztX">
-                    <div id="scanResult" data-page-node-id="pDEWrdp2zGorYECsEgdC37"></div>
-                    <label class="scan-opt" data-page-node-id="K7othEZM68GQrqDVVo5z9p"><input type="checkbox" id="autoStockOnScan" data-page-node-id="Uel8hD7gDlrR0k6HsOBB2F"> 核销后自动入库（需已填进货单价）</label>
-                    <div class="scan-hint" data-page-node-id="cvPJAtxvNVXW5pVmXjNHW7">💡 支持四种方式：① 扫码枪/蓝牙扫描器 ② 点"扫"摄像头实时识别（Chrome / Edge / 安卓；iOS Safari 用 h5-qrcode 兼容）③ 点"选图"从相册/拍照识别 ④ 手动输入单号后回车。一个单号对应多件商品时，扫一次整单核销。<br>📦 京东面单条码尾部的<b>件序号（如 -1-1、-2-3）会自动忽略</b>，录入时填不带后缀的单号即可，一票多件扫任意一个包裹都能对上。</div>
-                </div>
 
                 <div class="pur-toolbar" data-page-node-id="XjHDtVn8JgyGesXcEYz4GG">
                     <select id="purFilter" onchange="renderPurchases()" data-page-node-id="4B8UeGPTDk9i1O66UWiMWR">
@@ -903,19 +968,23 @@
             </div>
         </div>
 
-        <div id="page-manage" class="page" data-page-node-id="oOr7JWnY8wFWIbO2rVcJRj">
+        <!-- ==================== 库存管理（独立一栏，原来在「管理」页里） ==================== -->
+        <div id="page-stock" class="page" data-page-node-id="pageStock01">
             <div class="card span-2" data-page-node-id="Xvwsw2HGgCPPfI1FOlGmqp">
-                <div class="card-header" data-page-node-id="XFF9quDRjMwvizzvTsJm39">📦 库存总览
+                <div class="card-header" data-page-node-id="XFF9quDRjMwvizzvTsJm39">📦 库存管理
                     <select id="stockSortSel" onchange="setStockSort(this.value)" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #eee; width: auto; font-size: 0.8rem;" data-page-node-id="PmRLdAdOaCpGbyC75fd9aD">
                         <option value="value" data-page-node-id="1uIuldGHFH7f5qe2syEzyJ">按库存金额</option>
                         <option value="qty" data-page-node-id="8QKay2a7oa0VyDOhEtEptp">按库存数量</option>
                         <option value="name" data-page-node-id="DADzPVq7FW6jJGjapSBjnd">按名称</option>
                     </select>
                 </div>
+                <div id="stockSummaryBar" class="stock-sum-bar" data-page-node-id="pageStock02"></div>
                 <div class="sync-status" style="margin: 0 0 12px; text-align: left;" data-page-node-id="LjXzNa1QCDfPo1fn5kMT7e">💡 每个商品可点「🖼️ 加图片」上传一张照片（自动压缩，不占多少空间）；加了图之后，入库 / 出单 / 采购选商品时会直接显示缩略图，一眼就能认出来，不用一个个看文字<br>💡 不卖的款式可点"删除"移除：库存清除后无法再出单，历史销售记录会保留<br>💡 0 库存的商品会显示「N 天后自动清理」：连续 7 天没库存就自动从本表移除（历史流水照样保留）；只要还有「待收货」的采购单就不会被清，补货后倒计时自动取消</div>
                 <div id="stockList" class="stock-list" data-page-node-id="mo0x63y9hKRifTtiya37h6"></div>
             </div>
+        </div>
 
+        <div id="page-manage" class="page" data-page-node-id="oOr7JWnY8wFWIbO2rVcJRj">
             <div class="card" data-page-node-id="44S5KHQtzZ1MJ9ZKvOuQht">
                 <div class="card-header" style="border-left-color: var(--purple);" data-page-node-id="TFqOPHlw83YBxZmkmrNCo1">⚙️ 参数设置</div>
                 <div class="form-group" data-page-node-id="8pydmvUX6e5yK6T0wlKhVM">
@@ -1066,6 +1135,7 @@
         <div class="nav-item active" id="side-home" onclick="switchTab('home', this)" data-page-node-id="r060zGSJsZVz9tTF1AkDTx"><span class="nav-icon" data-page-node-id="t5C5EwQN7fE79Bmzf8iRHn">📊</span> 经营概览</div>
         <div class="nav-item" id="side-in" onclick="switchTab('in', this)" data-page-node-id="ZTJdabFkiS2G4FECqIsfBr"><span class="nav-icon" data-page-node-id="VQeX4P7oQ0lFLOBQshSIxt">📦</span> 商品入库<span id="purBadgeSide" class="nav-badge" data-page-node-id="GQnCjfqtjQx2jzNHeTraXl"></span></div>
         <div class="nav-item" id="side-out" onclick="switchTab('out', this)" data-page-node-id="TvJYp9Snovi58qMOJVEkN0"><span class="nav-icon" data-page-node-id="jeNDRFZMRxMDDPDfgkpCZj">🛒</span> 商品出单</div>
+        <div class="nav-item" id="side-stock" onclick="switchTab('stock', this)" data-page-node-id="sideStock01"><span class="nav-icon" data-page-node-id="sideStock02">📦</span> 库存管理</div>
         <div class="nav-item" id="side-return" onclick="switchTab('return', this)" data-page-node-id="dUresLO8D96G5vclJgBl6B"><span class="nav-icon" data-page-node-id="actfUsMSxi10FyznwwY35V">🔄</span> 退货退款</div>
         <div class="nav-item" id="side-ship" onclick="switchTab('ship', this)" data-page-node-id="QM0a5dk2FDKO71M4EjxfCy"><span class="nav-icon" data-page-node-id="MzhZLI1U8SeC4hECrJIbgV">💰</span> 费用报销</div>
         <div class="nav-item" id="side-stats" onclick="switchTab('stats', this)" data-page-node-id="DNt7wrXAN9a8M2qM5klA6o"><span class="nav-icon" data-page-node-id="7wMv8yxv4mZO7FPVsBxb41">📈</span> 统计分析</div>
@@ -1087,6 +1157,10 @@
             <span class="nav-icon" data-page-node-id="vYBDV9bwrHLzWXMpqJcvBx">🛒</span>
             出单
         </div>
+        <div class="nav-item" onclick="switchTab('stock', this)" data-page-node-id="bottomStock01">
+            <span class="nav-icon" data-page-node-id="bottomStock02">📦</span>
+            库存
+        </div>
         <div class="nav-item" onclick="switchTab('return', this)" data-page-node-id="VqMBVdWrA7HI6zbbJn81lH">
             <span class="nav-icon" data-page-node-id="gn2CCIiHI8nHQR6fnLguhi">🔄</span>
             退货
@@ -1107,7 +1181,7 @@
 
     <div id="scanModal" class="modal-overlay" onclick="if(event.target===this) stopCameraScan()" data-page-node-id="bF9fzHvS7GFWvt9e26VifY">
         <div class="modal" style="max-width: 420px;" data-page-node-id="8BteoAcip7xnmhCioI3Umt">
-            <h3 style="margin-bottom: 12px;" data-page-node-id="eZrAAr3EoCEfTf8GCTRBjO">📷 扫描快递单号</h3>
+            <h3 style="margin-bottom: 12px;" data-page-node-id="eZrAAr3EoCEfTf8GCTRBjO">📷 扫码识别（订单号 / 快递单号）</h3>
             <div class="video-wrap" data-page-node-id="7k7VUVWjql9llabNE0yjjB">
                 <video id="scanVideo" autoplay playsinline muted data-page-node-id="U3NLM9CAzhCpUnsTHEQ54s"></video>
                 <div class="scan-line" data-page-node-id="2MG5jAlrDbBKrIXq4hIhGv"></div>
@@ -1140,7 +1214,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-02 17';
+        const APP_BUILD = '2026-11-13 22';
         const MANUAL_SYNC_ONLY = true;
 
         function getFeeRate() {
@@ -1701,6 +1775,9 @@
         function setSyncStatus(t) {
             const el = document.getElementById('syncStatus');
             if (el) el.innerText = t;
+            // 手机首页的同步卡片也同步显示状态，省得来回切页
+            const m = document.getElementById('mSyncStatus');
+            if (m) m.innerText = t;
         }
 
         /* ---------- 版本显示 / 线上版本自检（新增） ---------- */
@@ -3389,7 +3466,7 @@
             if (qty <= 0) { alert('请输入有效的数量'); return; }
             if (cost < 0 || !Number.isFinite(cost)) { alert('采购成本不能为负数'); return; }
 
-            // 采购待收货：名字填好就顺手在「库存总览」里建好商品（0 库存占位，到货入库时补数量）
+            // 采购待收货：名字填好就顺手在「库存管理」里建好商品（0 库存占位，到货入库时补数量）
             const purKey = name.toLowerCase();
             let createdNew = false;
             if (!appData.products[purKey]) {
@@ -3441,11 +3518,11 @@
             renderPurchases();
             const tipName = name.length > 14 ? name.slice(0, 14) + '…' : name;
             showToast(createdNew
-                ? '已加入并新建商品：' + tipName + '（已在库存总览，库存 0）'
+                ? '已加入并新建商品：' + tipName + '（已在库存管理，库存 0）'
                 : '已加入：' + tipName + '（表单已保留，直接改数量回车即可）');
         });
 
-        // 待收货：商品名一填好（输入框内容变了并离开焦点）就自动在库存总览建好商品
+        // 待收货：商品名一填好（输入框内容变了并离开焦点）就自动在库存管理建好商品
         function autoCreateProductFromName(rawName, cost) {
             const name = String(rawName || '').trim();
             if (!name) return false;
@@ -3465,7 +3542,7 @@
                 const c = document.getElementById('purCost');
                 if (autoCreateProductFromName(this.value, c ? c.value : 0)) {
                     const n = this.value.trim();
-                    showToast('已自动新建商品：' + (n.length > 12 ? n.slice(0, 12) + '…' : n) + '（库存总览里可查）');
+                    showToast('已自动新建商品：' + (n.length > 12 ? n.slice(0, 12) + '…' : n) + '（库存管理里可查）');
                 }
             });
         })();
@@ -3717,10 +3794,17 @@
             return String(s == null ? '' : s).toUpperCase().replace(/[\s\-_]/g, '');
         }
 
+        // 只保留数字（京东面单常有 JD 前缀 / -1-1 件序号，纯数字才是订单号本体）
+        function digitsOf(s) {
+            return String(s == null ? '' : s).replace(/[^0-9]/g, '');
+        }
+
         // 生成同一单号的多种可能写法。
         // 京东面单条码常带「件序号」后缀，如 JD0123456789-1-1（第1件/共1件），
         // 一票多件时同一单号下会有 -1-3 / -2-3 / -3-3 三个码，扫任意一个都应认作同一票。
         // 所以这里把各种后缀逐级削掉，让「录入值」和「扫码值」能落到同一个形式上。
+        // 另外：面单上的「订单号」是 16 位纯数字，条码有时会带字母前缀，
+        // 因此额外补一份「纯数字」写法，保证「录入 16 位数字 / 扫带前缀的码」也能对上。
         function trackVariants(s) {
             const raw = String(s == null ? '' : s).trim().toUpperCase();
             if (!raw) return [];
@@ -3739,6 +3823,11 @@
                 if (one.test(r)) { r = r.replace(one, ''); add(r); continue; }
                 break;
             }
+            // 纯数字写法（去掉 JD 之类的前缀）
+            const d1 = digitsOf(raw);
+            if (d1.length >= 6) add(d1);
+            const d2 = digitsOf(r);
+            if (d2.length >= 6) add(d2);
             // 分段形式：取首段 / 末段 / 全拼（有些面单是「订单号-运单号」）
             const segs = raw.split(/[-\s_\/]+/).filter(Boolean);
             if (segs.length > 1) {
@@ -3749,20 +3838,31 @@
             return out;
         }
 
-        // 找清单里与扫码值最接近的单号，用于匹配失败时给用户提示（帮他对出差异）
+        // 一条待收货记录里所有「可以拿来对扫」的编号：订单号 + 快递单号
+        function purchaseCodes(p) {
+            const out = [];
+            [p.orderNo, p.trackingNo].forEach(v => {
+                const s = String(v == null ? '' : v).trim();
+                if (s) out.push(s);
+            });
+            return out;
+        }
+
+        // 找清单里与扫码值最接近的编号，用于匹配失败时给用户提示（帮他对出差异）
         function nearestTracking(raw) {
             const list = appData.purchases || [];
             const sv = trackVariants(raw);
             if (!sv.length) return null;
             let best = null, bestScore = 0;
             list.forEach(p => {
-                if (!p.trackingNo) return;
-                trackVariants(p.trackingNo).forEach(v => {
-                    sv.forEach(s => {
-                        let n = 0;
-                        const len = Math.min(v.length, s.length);
-                        while (n < len && v[n] === s[n]) n++;
-                        if (n > bestScore) { bestScore = n; best = p.trackingNo; }
+                purchaseCodes(p).forEach(code => {
+                    trackVariants(code).forEach(v => {
+                        sv.forEach(s => {
+                            let n = 0;
+                            const len = Math.min(v.length, s.length);
+                            while (n < len && v[n] === s[n]) n++;
+                            if (n > bestScore) { bestScore = n; best = code; }
+                        });
                     });
                 });
             });
@@ -3824,35 +3924,40 @@
             return true;
         }
 
-        // allowFuzzy=false 时只认「变体精确匹配」；allowFuzzy=true 才启用兜底的前缀/包含匹配。
-// 兜底匹配可能把 123456789 和 1234567890 这类前缀相同但实际不同的单号混为一谈，
-// 所以调用方拿到模糊结果后必须先让用户确认，不能直接核销。
-function findByTracking(rawInput, allowFuzzy) {
+        // allowFuzzy=false 时只认「变体精确匹配」；allowFuzzy=true 才启用兜底的包含匹配。
+        // 兜底匹配可能把 123456789 和 1234567890 这类前缀相同但实际不同的单号混为一谈，
+        // 所以调用方拿到模糊结果后必须先让用户确认，不能直接核销。
+        // 关键改动：同时拿「订单号 orderNo」和「快递单号 trackingNo」去对，
+        // 面单上的 16 位纯数字订单号条码也能一扫即核销（不用再手填快递单号）。
+        function findByTracking(rawInput, allowFuzzy) {
             const list = appData.purchases || [];
             if (!list.length) return [];
             const sv = trackVariants(rawInput);
             if (!sv.length) return [];
 
-            // ① 变体精确匹配：扫码值的任一写法 == 录入值的任一写法
+            // ① 变体精确匹配：扫码值的任一写法 == 录入值（订单号/快递单号）的任一写法
             //    能正确处理京东 -1-1 / -2-3 件序号，也不怕 -1-1 被当成另一张单
-            const exact = list.filter(p => {
-                if (!p.trackingNo) return false;
-                const pv = trackVariants(p.trackingNo);
-                return pv.some(v => sv.indexOf(v) >= 0);
-            });
+            const exact = list.filter(p => purchaseCodes(p).some(code =>
+                trackVariants(code).some(v => sv.indexOf(v) >= 0)
+            ));
             if (exact.length) return exact;
 
-            // ② 兜底：前缀/包含匹配，长度差 ≤ 4（需调用方二次确认）
+            // ② 兜底：纯数字包含匹配，长度差 ≤ 3 且不短于 8 位（16 位订单号偶尔会被打多/打少 1 位）
             if (allowFuzzy === false) return [];
             const key = normTrack(rawInput);
+            const keyDigits = digitsOf(rawInput);
             if (key.length >= 6) {
-                const loose = list.filter(p => {
-                    if (!p.trackingNo) return false;
-                    const t = normTrack(p.trackingNo);
-                    if (t.length < 5) return false;
-                    if (Math.abs(t.length - key.length) > 4) return false;
-                    return t.indexOf(key) >= 0 || key.indexOf(t) >= 0;
-                });
+                const loose = list.filter(p => purchaseCodes(p).some(code => {
+                    const t = normTrack(code);
+                    const tDigits = digitsOf(code);
+                    // 字母数字整体包含（长度差 ≤ 4）
+                    if (t.length >= 5 && Math.abs(t.length - key.length) <= 4 && (t.indexOf(key) >= 0 || key.indexOf(t) >= 0)) return true;
+                    // 纯数字包含（长度差 ≤ 3，避免 1234567 和 1234567890 这种误配）
+                    if (tDigits.length >= 8 && keyDigits.length >= 8 &&
+                        Math.abs(tDigits.length - keyDigits.length) <= 3 &&
+                        (tDigits.indexOf(keyDigits) >= 0 || keyDigits.indexOf(tDigits) >= 0)) return true;
+                    return false;
+                }));
                 if (loose.length) return loose;
             }
             return [];
@@ -3873,12 +3978,12 @@ function findByTracking(rawInput, allowFuzzy) {
 
             // 模糊命中：单号只是长得像，不能贸然核销，先让用户拍板
             if (fuzzy) {
-                const near0 = hits[0].trackingNo || '';
-                if (!confirm('清单里没有和「' + raw + '」一致的单号。\n\n' +
+                const near0 = purchaseCodes(hits[0])[0] || '';
+                if (!confirm('清单里没有和「' + raw + '」完全一致的编号。\n\n' +
                              '最接近的是：' + near0 + '\n\n' +
-                             '要按这个单号核销它的 ' + hits.length + ' 件商品吗？\n' +
-                             '（不确定就点「取消」，再去核对录入的单号）')) {
-                    showScanResult('已取消，未核销。请核对录入的快递单号：' + near0, false);
+                             '要按这个编号核销它的 ' + hits.length + ' 件商品吗？\n' +
+                             '（不确定就点「取消」，再去核对录入的订单号 / 快递单号）')) {
+                    showScanResult('已取消，未核销。请核对录入的订单号 / 快递单号：' + near0, false);
                     el.select();
                     return;
                 }
@@ -3887,13 +3992,13 @@ function findByTracking(rawInput, allowFuzzy) {
             if (!hits.length) {
                 playBeep(false); vibrate([60, 60, 60]);
                 const near = nearestTracking(raw);
-                showScanResult('❌ 清单里没有这个单号：' + raw +
+                showScanResult('❌ 待收货清单里没有这个编号：' + raw +
                     (near ? '\n清单里最接近的是：' + near : '') +
-                    '\n（已自动兼容京东 -1-1 件序号；若仍不匹配，请核对录入的单号）', false);
+                    '\n（已自动兼容面单「JD 前缀 / -1-1 件序号」，并对订单号做纯数字比对）', false);
                 if (confirm('未找到匹配的待收货商品：\n' + raw +
-                    (near ? '\n\n清单里最接近的单号：' + near : '') +
-                    '\n\n要把这个单号填到上方「快递单号」栏吗？')) {
-                    const t = document.getElementById('purTracking');
+                    (near ? '\n\n清单里最接近的编号：' + near : '') +
+                    '\n\n要把这个编号填到上方「快递单号」栏吗？\n（填好后再扫一次就能对上；若这是订单号，请填到「订单号」栏）')) {
+                    const t = document.getElementById('purTracking') || document.getElementById('purOrder');
                     if (t) { t.value = raw; t.focus(); }
                 }
                 el.select();
@@ -3932,11 +4037,11 @@ function findByTracking(rawInput, allowFuzzy) {
             renderAllLists();
             playBeep(true); vibrate(60);
             const names = todo.map(p => p.name + ' ×' + p.qty).join('、');
-            // 扫码值带件序号（-1-1）时说明匹配到了哪个已录单号，让用户心里有数
-            const no0 = todo[0].trackingNo || '';
-            const diffNote = (normTrack(no0) !== normTrack(raw))
-                ? '\n（面单 ' + raw + ' 已匹配单号 ' + no0 + '）' : '';
-            showScanResult('✅ 核销成功（' + todo.length + ' 件）：' + names + diffNote +
+            // 扫码值带件序号 / 字母前缀时，说明匹配到了哪个已录编号，让用户心里有数
+            const no0 = todo[0].orderNo || todo[0].trackingNo || '';
+            const diffNote = (normTrack(no0) !== normTrack(raw) && digitsOf(no0) !== digitsOf(raw))
+                ? '\n（扫描 ' + raw + ' → 匹配订单 ' + no0 + '）' : '';
+            showScanResult('✅ 已标记收货（' + todo.length + ' 件）：' + names + diffNote +
                            (stocked ? '\n📦 已自动入库 ' + stocked + ' 件' : '\n👉 点右侧「入库」转入库存'), true);
             el.value = '';
             el.focus();
@@ -4013,6 +4118,41 @@ function findByTracking(rawInput, allowFuzzy) {
         */
         let scanStream = null, scanTimer = null, scanDetector = null, scanBusy = false;
         let h5qr = null, h5qrTimer = null;
+        // 扫码结果去向：null = 扫码头（自动核销）；'purOrder' 等 = 直接填进该输入框
+        let scanTargetSelector = null;
+
+        // 扫码统一入口：按当前「去向」决定是填表单还是立刻核销
+        function handleScannedValue(val) {
+            const v = String(val == null ? '' : val).trim();
+            if (!v) return;
+            if (scanTargetSelector) {
+                const t = document.getElementById(scanTargetSelector);
+                const target = scanTargetSelector;
+                scanTargetSelector = null;
+                if (t) {
+                    t.value = v;
+                    try {
+                        t.dispatchEvent(new Event('input', { bubbles: true }));
+                        t.dispatchEvent(new Event('change', { bubbles: true }));
+                        t.focus();
+                    } catch (e) {}
+                    showToast('已扫入' + (target === 'purOrder' ? '订单号' : '') + '：' + v);
+                }
+                return;
+            }
+            const si = document.getElementById('scanInput');
+            if (si) { si.value = v; doScan(); }
+        }
+
+        // 扫面单自动填「订单号」（录入待收货时用，省得手打 16 位）
+        function scanIntoField(id) {
+            scanTargetSelector = id;
+            startCameraScan(true);
+        }
+        function scanIntoFieldByImage(id) {
+            scanTargetSelector = id;
+            startImageScan(true);
+        }
 
         // 给 Promise 加超时保护：iOS 主屏网页 App 里 getUserMedia 可能永久挂起（既不成功也不报错）
         function withTimeout(promise, ms, timeoutMsg) {
@@ -4040,7 +4180,8 @@ function findByTracking(rawInput, allowFuzzy) {
             return caps;
         }
 
-        async function startCameraScan() {
+        async function startCameraScan(keepTarget) {
+            if (!keepTarget) scanTargetSelector = null;
             const caps = scannerCapabilities();
             const camErr = (m) => { showScanResult('⚠️ ' + m + '\n可改用：扫码枪 / 「选图」拍照识别 / 手动输入单号后回车', false); document.getElementById('scanInput').focus(); };
 
@@ -4093,13 +4234,13 @@ function findByTracking(rawInput, allowFuzzy) {
                     let formats;
                     try { formats = await window.BarcodeDetector.getSupportedFormats(); } catch (e) { formats = undefined; }
                     scanDetector = formats ? new window.BarcodeDetector({ formats }) : new window.BarcodeDetector();
-                    msg.innerText = '对准快递单上的条形码，识别后自动核销';
+                    msg.innerText = scanTargetSelector ? '对准面单上的订单号条形码，识别后自动填入' : '对准面单上的条形码（订单号/快递单号），识别后自动核销';
                     scanBusy = false;
                     clearInterval(scanTimer);
                     scanTimer = setInterval(tickScanNative, 300);
                 } else if (caps.js) {
                     // Safari / Firefox：JS 库路径（库自管摄像头）
-                    msg.innerText = '对准快递单上的条形码，识别后自动核销（首次扫描约需 1-2 秒）';
+                    msg.innerText = (scanTargetSelector ? '对准面单上的订单号条形码，识别后自动填入' : '对准面单上的条形码（订单号/快递单号），识别后自动核销') + '（首次扫描约需 1-2 秒）';
                     startH5QrContinuous();
                 } else {
                     msg.innerText = '当前浏览器没有任何扫码识别能力，请用「选图」或手动输入';
@@ -4133,8 +4274,7 @@ function findByTracking(rawInput, allowFuzzy) {
                     const val = String(codes[0].rawValue || '').trim();
                     if (val) {
                         stopCameraScan();
-                        const si = document.getElementById('scanInput');
-                        if (si) { si.value = val; doScan(); }
+                        handleScannedValue(val);
                     }
                 }
             } catch (e) {}
@@ -4183,8 +4323,7 @@ function findByTracking(rawInput, allowFuzzy) {
                     },
                     (decodedText) => {
                         stopCameraScan();
-                        const si = document.getElementById('scanInput');
-                        if (si) { si.value = String(decodedText || '').trim(); doScan(); }
+                        handleScannedValue(decodedText);
                     },
                     () => { /* per-frame miss, ignore */ }
                 ).catch(err => {
@@ -4198,7 +4337,8 @@ function findByTracking(rawInput, allowFuzzy) {
         }
 
         // 「选图」：从相册/相机拍照取一张图片识别 —— 即使摄像头被禁也能用
-        function startImageScan() {
+        function startImageScan(keepTarget) {
+            if (!keepTarget) scanTargetSelector = null;
             const inp = document.getElementById('scanFile');
             if (!inp) return;
             inp.value = '';
@@ -4222,8 +4362,7 @@ function findByTracking(rawInput, allowFuzzy) {
                 URL.revokeObjectURL(url);
                 const val = String(text || '').trim();
                 if (!val) { showScanResult('❌ 图片里没识别到条码，换张更清晰的角度试试', false); return; }
-                const si = document.getElementById('scanInput');
-                if (si) { si.value = val; doScan(); }
+                handleScannedValue(val);
             } catch (e) {
                 showScanResult('❌ 识别失败：' + (e && e.message ? e.message : e) + '\n（手机：对准条码拍照，条码占画面一半以上、横平）', false);
             }
@@ -4379,10 +4518,10 @@ function findByTracking(rawInput, allowFuzzy) {
             showToast('已移除图片');
         }
 
-        /* ==================== 0 库存商品自动清理（连续 7 天没库存 → 从库存总览移除） ====================
+        /* ==================== 0 库存商品自动清理（连续 7 天没库存 → 从库存管理移除） ====================
            规则：
            · 库存掉到 0 的那一刻开始计时（zeroSince），一旦补货就清掉计时；
-           · 连续 7 天仍是 0 库存 → 自动从「库存总览」删除；
+           · 连续 7 天仍是 0 库存 → 自动从「库存管理」删除；
            · 只要该商品还有「待收货」的采购单，就先不删（货还在路上）；
            · 出入库/销售历史流水一条都不会动，仍可按条件查询。 */
         const ZERO_PURGE_DAYS = 7;
@@ -4464,6 +4603,24 @@ function findByTracking(rawInput, allowFuzzy) {
             const container = document.getElementById('stockList');
             const keys = Object.keys(appData.products);
             const sortMode = getStockSort();
+            // 顶部汇总：品类数 / 总件数 / 总库存金额 / 缺货款数
+            const sumBar = document.getElementById('stockSummaryBar');
+            if (sumBar) {
+                let kinds = 0, qty = 0, val = 0, zeroCnt = 0;
+                keys.forEach(k => {
+                    const p = appData.products[k];
+                    const q = Number(p.stock) || 0;
+                    if (q > 0.0001) kinds++;
+                    qty += q;
+                    val += q * (Number(p.cost) || 0);
+                    if (q <= 0.0001) zeroCnt++;
+                });
+                sumBar.innerHTML =
+                    '<span class="ssb-item"><b>' + kinds + '</b> 在售品类</span>' +
+                    '<span class="ssb-item"><b>' + fmtQty(qty) + '</b> 件库存</span>' +
+                    '<span class="ssb-item"><b>¥' + val.toFixed(2) + '</b> 库存金额</span>' +
+                    (zeroCnt ? '<span class="ssb-item zero"><b>' + zeroCnt + '</b> 个缺货</span>' : '');
+            }
             if (sortMode === 'qty') {
                 keys.sort((a, b) => appData.products[b].stock - appData.products[a].stock);
             } else if (sortMode === 'value') {
@@ -4827,7 +4984,7 @@ function findByTracking(rawInput, allowFuzzy) {
             if (document.activeElement === input) input.blur();
         }
 
-        // 下拉选项来源 = 「库存总览」现有商品（appData.products），总览里没有的不会出现在选项里，
+        // 下拉选项来源 = 「库存管理」现有商品（appData.products），总览里没有的不会出现在选项里，
         // 只能手动输入名称。出单额外过滤掉 0 库存（0 库存本来也出不了单）。
         function stockListKeys() {
             return Object.keys(appData.products || {}).filter(k => {
@@ -4850,9 +5007,9 @@ function findByTracking(rawInput, allowFuzzy) {
         }
 
         function suggestEmptyHTML(type) {
-            if (type === 'out') return '<div class="suggestion-empty">库存总览里没有可出单的商品（0 库存不能出单）</div>';
-            if (type === 'in') return '<div class="suggestion-empty">库存总览里还没有这个商品，直接输入名称即可（会自动新建）</div>';
-            return '<div class="suggestion-empty">库存总览里没有匹配的商品，直接输入名称即可</div>';
+            if (type === 'out') return '<div class="suggestion-empty">库存管理里没有可出单的商品（0 库存不能出单）</div>';
+            if (type === 'in') return '<div class="suggestion-empty">库存管理里还没有这个商品，直接输入名称即可（会自动新建）</div>';
+            return '<div class="suggestion-empty">库存管理里没有匹配的商品，直接输入名称即可</div>';
         }
 
         function showSuggestions(type) {
@@ -4917,10 +5074,10 @@ function findByTracking(rawInput, allowFuzzy) {
                     });
                     box.style.display = 'block';
                 } else if (type === 'out' || type === 'pur' || type === 'rej' || type === 'in' || type === 'return') {
-                    // 库存总览里没有 → 不给选项（这里只提示，名称照旧手动输入即可）
+                    // 库存管理里没有 → 不给选项（这里只提示，名称照旧手动输入即可）
                     box.innerHTML = type === 'out'
-                        ? '<div class="suggestion-empty">库存总览里没有匹配的有库存商品</div>'
-                        : '<div class="suggestion-empty">库存总览里没有这个商品，直接输入即可</div>';
+                        ? '<div class="suggestion-empty">库存管理里没有匹配的有库存商品</div>'
+                        : '<div class="suggestion-empty">库存管理里没有这个商品，直接输入即可</div>';
                     box.style.display = 'block';
                 } else { box.style.display = 'none'; }
             });
@@ -5498,7 +5655,11 @@ function findByTracking(rawInput, allowFuzzy) {
             // 红色「经营概览」数据块只在首页显示 —— 其它页面隐藏，省掉一大块重复内容，直接看到表单
             showDashboard(tabId === 'home');
             if (tabId === 'stats') renderStats();
-            // 进「管理」页（库存总览）时再体检一次 0 库存商品
+            // 进「库存管理」页时刷新清单 + 体检一次 0 库存商品
+            if (tabId === 'stock') {
+                try { runZeroStockMaintenance(false); } catch (e) {}
+                try { renderStockList(); } catch (e) {}
+            }
             if (tabId === 'manage') { try { runZeroStockMaintenance(false); } catch (e) {} }
             window.scrollTo(0, 0);
         }
