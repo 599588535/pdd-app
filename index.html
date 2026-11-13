@@ -1189,7 +1189,8 @@
                 <div id="h5qr-reader" style="display:none;"></div>
             </div>
             <div id="scanModalMsg" class="scan-hint" style="text-align: center; font-size: 0.8rem; color: #555;" data-page-node-id="wxNkFisbPNjqc7ESTU4YSZ">正在启动摄像头…</div>
-            <div class="modal-actions" data-page-node-id="DjHkizdCWTaqKNmA4CQMNf">
+            <div class="modal-actions" style="gap: 8px; justify-content: center;" data-page-node-id="DjHkizdCWTaqKNmA4CQMNf">
+                <button type="button" class="btn btn-outline" style="margin-top: 0; width: auto; padding: 8px 14px; font-size: 0.8rem;" onclick="switchScanEngine()" data-page-node-id="gR2kLnW9xTpQ8vZc1bHfMd">🔄 换识别引擎</button>
                 <button type="button" class="btn btn-outline" style="margin-top: 0; width: auto; padding: 8px 20px;" onclick="stopCameraScan()" data-page-node-id="O27RCEd0jChgESL9zLfCtx">关闭</button>
             </div>
         </div>
@@ -1214,7 +1215,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-13 22';
+        const APP_BUILD = '2026-11-13 23';
         const MANUAL_SYNC_ONLY = true;
 
         function getFeeRate() {
@@ -4120,6 +4121,11 @@
         let h5qr = null, h5qrTimer = null;
         // 扫码结果去向：null = 扫码头（自动核销）；'purOrder' 等 = 直接填进该输入框
         let scanTargetSelector = null;
+        // 识别引擎控制：null = 自动选择；'native' / 'h5qr' = 用户手动强制（点「换识别引擎」切换）
+        let scanForceMode = null;
+        // 引擎运行状态：开了几秒、成功分析几帧、连续报错几次（用于诊断提示和自动切换）
+        let scanStats = { startedAt: 0, frames: 0, errors: 0, engine: '' };
+        let scanWatchTimer = null;
 
         // 扫码统一入口：按当前「去向」决定是填表单还是立刻核销
         function handleScannedValue(val) {
@@ -4206,7 +4212,9 @@
                 //     所以必须包一层超时，否则用户只会看到「正在启动摄像头…」卡死且无任何报错
                 scanStream = await withTimeout(
                     navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: 'environment' }, audio: false }
+                        // 提高分辨率：条形码黑白条很细，低分辨率摄像头根本读不出来
+                        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                        audio: false
                     }),
                     window.__isStandalone ? 12000 : 8000,
                     '摄像头无响应'
@@ -4229,19 +4237,28 @@
                     });
                 }
 
-                if (caps.native) {
-                    // Chrome / Edge / Android：原生路径
+                // 引擎选择：用户强制 > 浏览器能力。
+                // 原生引擎（BarcodeDetector）快，但部分手机浏览器虽有此 API 却静默失败，
+                // 所以必须留自动兜底 + 手动切换通道。
+                const wantNative = scanForceMode === 'h5qr' ? false : (scanForceMode === 'native' ? true : caps.native);
+                const aimText = scanTargetSelector ? '对准面单上的订单号条形码' : '对准面单上的条形码（订单号/快递单号均可）';
+                if (wantNative && caps.native) {
+                    // Chrome / Edge / Android 原生路径
                     let formats;
                     try { formats = await window.BarcodeDetector.getSupportedFormats(); } catch (e) { formats = undefined; }
                     scanDetector = formats ? new window.BarcodeDetector({ formats }) : new window.BarcodeDetector();
-                    msg.innerText = scanTargetSelector ? '对准面单上的订单号条形码，识别后自动填入' : '对准面单上的条形码（订单号/快递单号），识别后自动核销';
+                    scanStats = { startedAt: Date.now(), frames: 0, errors: 0, engine: 'native' };
+                    msg.innerText = aimText + '｜引擎：原生（快）';
                     scanBusy = false;
                     clearInterval(scanTimer);
                     scanTimer = setInterval(tickScanNative, 300);
+                    startScanWatch();
                 } else if (caps.js) {
-                    // Safari / Firefox：JS 库路径（库自管摄像头）
-                    msg.innerText = (scanTargetSelector ? '对准面单上的订单号条形码，识别后自动填入' : '对准面单上的条形码（订单号/快递单号），识别后自动核销') + '（首次扫描约需 1-2 秒）';
+                    // Safari / Firefox / 国产浏览器：JS 库路径（库自管摄像头）
+                    scanStats = { startedAt: Date.now(), frames: 0, errors: 0, engine: 'h5qr' };
+                    msg.innerText = aimText + '｜引擎：兼容（首次约 1-2 秒）';
                     startH5QrContinuous();
+                    startScanWatch();
                 } else {
                     msg.innerText = '当前浏览器没有任何扫码识别能力，请用「选图」或手动输入';
                 }
@@ -4270,15 +4287,72 @@
             scanBusy = true;
             try {
                 const codes = await scanDetector.detect(video);
+                scanStats.frames++;
+                scanStats.errors = 0;
                 if (codes && codes.length) {
                     const val = String(codes[0].rawValue || '').trim();
                     if (val) {
+                        scanBusy = false;
                         stopCameraScan();
                         handleScannedValue(val);
+                        return;
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                scanStats.errors++;
+                // 有些手机浏览器：BarcodeDetector 存在但 detect() 每次都报错（静默失败），
+                // 表现就是「对着条码一直没反应」。连续 6 次报错(约2秒) → 自动切兼容引擎
+                if (scanStats.errors >= 6 && scannerCapabilities().js) {
+                    scanForceMode = 'h5qr';
+                    scanBusy = false;
+                    stopCameraScan();
+                    showScanResult('⚠️ 手机自带的识别引擎不可用，已自动切换到「兼容引擎」，正在重新打开摄像头…', false);
+                    startCameraScan(true);
+                    return;
+                }
+            }
             scanBusy = false;
+        }
+
+        // 扫码心跳：每秒更新一次状态提示。识别不出来时告诉用户怎么调整，
+        // 并显示引擎名和已扫秒数，方便判断是「在识别但没对准」还是「引擎坏了」
+        function startScanWatch() {
+            clearInterval(scanWatchTimer);
+            scanWatchTimer = setInterval(() => {
+                if (!scanStats.startedAt) return;
+                const m = document.getElementById('scanModalMsg');
+                if (!m) return;
+                const sec = Math.round((Date.now() - scanStats.startedAt) / 1000);
+                if (sec < 8) return;
+                const eng = scanStats.engine === 'native' ? '原生引擎' : '兼容引擎';
+                let tip;
+                if (sec >= 25) {
+                    tip = '\n🎯 一直没反应？①手机离条码 10-25 厘米，条码横过来占画面一半以上 ②光线要充足、等画面变清楚（对焦） ③点下方「🔄 换识别引擎」试试 ④或点「关闭」后用「🖼️ 选图」拍照识别';
+                } else {
+                    tip = '\n💡 还没识别到：靠近一点（10-25 厘米），让条码占画面一半，等对焦变清楚';
+                }
+                const framesNote = (scanStats.engine === 'native')
+                    ? (scanStats.frames > 0 ? '，已分析 ' + scanStats.frames + ' 帧' : '，还没成功取到画面帧…')
+                    : '';
+                m.innerText = eng + '运行中，已扫 ' + sec + ' 秒' + framesNote + tip;
+            }, 1000);
+        }
+
+        // 手动切换识别引擎（某个引擎在当前手机上不好使时的逃生通道）
+        function switchScanEngine() {
+            const caps = scannerCapabilities();
+            const curNative = scanStats.engine ? (scanStats.engine === 'native') : (scanForceMode !== 'h5qr' && caps.native);
+            if (curNative) {
+                if (!caps.js) { alert('当前浏览器只有一种识别引擎可用。\n请改用「🖼️ 选图」拍照识别。'); return; }
+                scanForceMode = 'h5qr';
+            } else {
+                if (!caps.native) { alert('当前浏览器没有原生识别引擎（iPhone 常见），已在用兼容引擎。\n请改用「🖼️ 选图」拍照识别。'); return; }
+                scanForceMode = 'native';
+            }
+            const keepT = scanTargetSelector;
+            stopCameraScan();
+            scanTargetSelector = keepT;   // 保留扫码去向（填订单号/直接核销）
+            startCameraScan(true);
         }
 
         // html5-qrcode 路径（Safari / Firefox）：库必须自己管理摄像头和预览，
@@ -4308,15 +4382,16 @@
                     window.Html5QrcodeSupportedFormats.ITF,
                     window.Html5QrcodeSupportedFormats.UPC_A,
                     window.Html5QrcodeSupportedFormats.UPC_E,
-                    window.Html5QrcodeSupportedFormats.CODABAR,
-                    window.Html5QrcodeSupportedFormats.DATA_MATRIX,
-                    window.Html5QrcodeSupportedFormats.PDF_417
+                    window.Html5QrcodeSupportedFormats.CODABAR
+                    // 注：去掉了 PDF_417 / DATA_MATRIX —— 这两种格式识别极慢，
+                    // 12 种格式全开时兼容引擎经常对着条码几秒都出不了结果
                 ];
                 h5qr.start(
                     { facingMode: 'environment' },   // ✅ 修复点：传摄像头配置，而不是 video 元素
                     {
                         fps: 10,
-                        aspectRatio: 4 / 3,
+                        // 指引框：只分析画面中间区域 → 识别更快，用户也知道往哪对准
+                        qrbox: { width: 280, height: 170 },
                         disableFlip: false,
                         formatsToSupport: formatsToSupport,
                         verbose: false
@@ -4326,7 +4401,10 @@
                         handleScannedValue(decodedText);
                     },
                     () => { /* per-frame miss, ignore */ }
-                ).catch(err => {
+                ).then(() => {
+                    // 摄像头真正跑起来后才开始计时，否则心跳提示会把「启动中」误报成「扫不到」
+                    scanStats = { startedAt: Date.now(), frames: 0, errors: 0, engine: 'h5qr' };
+                }).catch(err => {
                     const msg = document.getElementById('scanModalMsg');
                     if (msg) msg.innerText = '启动失败：' + (err && err.message ? err.message : err) + '\n试试「选图」拍照识别';
                 });
@@ -4370,6 +4448,8 @@
 
         function stopCameraScan() {
             clearInterval(scanTimer); scanTimer = null;
+            clearInterval(scanWatchTimer); scanWatchTimer = null;
+            scanStats = { startedAt: 0, frames: 0, errors: 0, engine: '' };
             if (h5qr) {
                 try { h5qr.stop().then(() => { try { h5qr.clear(); } catch (e) {} }).catch(() => {}); } catch (e) {}
                 h5qr = null;
