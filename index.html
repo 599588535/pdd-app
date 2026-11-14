@@ -1049,6 +1049,17 @@
                 <small style="color:#999; font-size:0.75rem; display:block; text-align:center; margin-top:5px;" data-page-node-id="uixiUWFIf0lk6RPdXWpLbx">*当前为手动同步：修改后点「手动上传」，换设备前点「手动下载」<br data-page-node-id="YlNrBTOAv9Up7UizHgTMyA">*建议数据仓库都用<b data-page-node-id="zBXF85AjZDzgAzmeFvinKQ">私有</b>仓库（数据不公开）。选 Gitee 时：gitee.com → 设置 → 安全设置 → 私人令牌 → 勾选 <b>projects</b> 权限 → 生成后粘贴到上面</small>
             </div>
 
+            <!-- 本机存储（IndexedDB 大容量） -->
+            <div class="card" data-page-node-id="storeCard01">
+                <div class="card-header" style="border-left-color: var(--success);" data-page-node-id="storeCard02">💾 本机存储（图片多也不会再爆）</div>
+                <div class="sync-status" id="storageInfo" style="margin: -8px 0 10px; text-align: left;" data-page-node-id="storeCard03">检测中…</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;" data-page-node-id="storeCard04">
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="compressAllImages()" data-page-node-id="storeCard05">🗜️ 压缩全部图片</button>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="refreshStorageInfo()" data-page-node-id="storeCard06">🔄 重新检测</button>
+                </div>
+                <small style="color:#999; font-size:0.75rem; display:block; margin-top:8px;" data-page-node-id="storeCard07">数据现在存在浏览器的<b>大容量仓库（IndexedDB）</b>，iPhone 上可用几百 MB，图片再多也不会再提示「存储写不进去」。localStorage 只留一份小副本救命用。<br>💡 点「压缩全部图片」会把已有图片重新压到 260px，适合「上传云端很慢」或「想让手机更省空间」时用一次。</small>
+            </div>
+
             <!-- 版本体检（新增） -->
             <div class="card" data-page-node-id="verCard01">
                 <div class="card-header" style="border-left-color: var(--warning);" data-page-node-id="verCard02">🩺 版本体检（更新有没有生效）</div>
@@ -1215,7 +1226,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-13 23';
+        const APP_BUILD = '2026-11-14 14';
         const MANUAL_SYNC_ONLY = true;
 
         function getFeeRate() {
@@ -1354,8 +1365,12 @@
             { name: "box酷洛米", qty: 1, cost: 141.38, timestamp: "2024-08-12T12:25:00Z" }
         ];
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadData();
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 数据现在存在 IndexedDB，读取是异步的：必须等它读完再渲染，
+            // 否则会先画一屏旧数据/空白，再跳一下
+            try { await loadData(); } catch (e) { console.warn('载入数据失败', e); }
+            // 请求「持久化存储」：iPhone 存储紧张时别把本页数据清掉
+            try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
             loadGithubConfig();
             loadFeeRate();
             document.getElementById('shipDate').value = todayStr();
@@ -1449,6 +1464,7 @@
             initialSync();
             window.addEventListener('online', () => initialSync());
             window.addEventListener('pagehide', flushSyncOnExit);
+            window.addEventListener('pagehide', () => { try { flushIdbPending(); } catch (e) {} });
 
             // 定时瞄一眼云端：另一台设备改了数据，这边最多 90 秒就能看到（页面在前台时）
             cloudPollTimer = setInterval(() => pollCloudOnce(false), CLOUD_POLL_MS);
@@ -1461,9 +1477,148 @@
                     // 带图片的数据全在这个尺寸之上，等于从来没发出去过。
                     if (syncConfigured() && hasLocalChanges() && !syncBusy) autoPush();
                     flushSyncOnExit();   // 数据小时再用 keepalive 双保险
+                    try { flushIdbPending(); } catch (e) {}
                 }
             });
         });
+
+        /* ==================== 本机存储层：IndexedDB 为主，localStorage 为兜底 ====================
+           iPhone Safari / 主屏网页 App 的 localStorage 硬上限只有约 5MB。
+           商品图片（base64）一多就必然写不进去，现象就是「保存失败 / 刷新后数据倒退」。
+           IndexedDB 在 iOS 上配额大得多（免费可用几百 MB），所以主数据改存 IndexedDB；
+           localStorage 只在数据不大时留一份镜像（兼容旧文件版本、也当救急副本）。 */
+        const IDB_NAME = 'pddStorePro', IDB_VER = 1, IDB_STORE = 'kv';
+        const LS_MIRROR_MAX = 1500000;      // 超过 1.5MB 就别再往 localStorage 写了（一定爆）
+        let idbDbPromise = null, idbReady = false, storageMode = 'local';
+        let idbWriteBusy = false, idbWriteNext = null;
+        let lastMirrorOk = true, storageWarned = false, lastLiteAt = 0;
+
+        function idbOpen() {
+            if (idbDbPromise) return idbDbPromise;
+            idbDbPromise = new Promise(function (resolve) {
+                try {
+                    if (!window.indexedDB) { resolve(null); return; }
+                    const req = indexedDB.open(IDB_NAME, IDB_VER);
+                    req.onupgradeneeded = function () {
+                        const db = req.result;
+                        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+                    };
+                    req.onsuccess = function () { resolve(req.result); };
+                    req.onerror = function () { resolve(null); };
+                    req.onblocked = function () { resolve(null); };
+                } catch (e) { resolve(null); }
+            });
+            return idbDbPromise;
+        }
+
+        function idbSet(key, value) {
+            return idbOpen().then(function (db) {
+                if (!db) return false;
+                return new Promise(function (resolve) {
+                    try {
+                        const tx = db.transaction(IDB_STORE, 'readwrite');
+                        tx.objectStore(IDB_STORE).put(value, key);
+                        tx.oncomplete = function () { resolve(true); };
+                        tx.onerror = function () { resolve(false); };
+                        tx.onabort = function () { resolve(false); };
+                    } catch (e) { resolve(false); }
+                });
+            }).catch(function () { return false; });
+        }
+
+        function idbGet(key) {
+            return idbOpen().then(function (db) {
+                if (!db) return null;
+                return new Promise(function (resolve) {
+                    try {
+                        const tx = db.transaction(IDB_STORE, 'readonly');
+                        const rq = tx.objectStore(IDB_STORE).get(key);
+                        rq.onsuccess = function () { resolve(rq.result == null ? null : rq.result); };
+                        rq.onerror = function () { resolve(null); };
+                    } catch (e) { resolve(null); }
+                });
+            }).catch(function () { return null; });
+        }
+
+        // 写主数据：同一时刻只跑一个事务，后来的覆盖前面的（连续操作不会排队写十几次）
+        function idbWriteData(obj) {
+            if (idbWriteBusy) { idbWriteNext = obj; return; }
+            idbWriteBusy = true;
+            idbSet('pddData', obj).then(function (ok) {
+                idbWriteBusy = false;
+                if (ok) {
+                    idbReady = true;
+                    storageMode = 'idb';
+                } else if (!lastMirrorOk && !storageWarned) {
+                    // IndexedDB 也写不进去、localStorage 也没写成 → 只剩备份这条路
+                    storageWarned = true;
+                    showSyncWarn('⚠️ 本机存储写不进去了（可能是手机存储空间已满）。请点「备份JSON」先存一份，再清理手机空间。');
+                }
+                if (idbWriteNext) { const n = idbWriteNext; idbWriteNext = null; idbWriteData(n); }
+            });
+        }
+
+        // 页面要走了（切后台 / 锁屏 / 关闭）：把还没发出去的那次写入立刻推给 IndexedDB
+        function flushIdbPending() {
+            if (!idbWriteNext) return;
+            const n = idbWriteNext;
+            idbWriteNext = null;
+            idbSet('pddData', n);
+        }
+
+        // 数据太大时，只在 localStorage 留一份「无图片」的救急副本（最多 2 分钟一次，别拖慢操作）
+        function mirrorLiteThrottled() {
+            if (Date.now() - lastLiteAt < 120000) return;
+            lastLiteAt = Date.now();
+            try {
+                const lite = JSON.parse(JSON.stringify(appData));
+                Object.keys(lite.products || {}).forEach(k => { if (lite.products[k]) delete lite.products[k].img; });
+                localStorage.setItem('pddBizDataLite', JSON.stringify(lite));
+                localStorage.removeItem('pddBizDataPro');
+                lastMirrorOk = true;
+            } catch (e) {
+                try { localStorage.removeItem('pddBizDataPro'); localStorage.removeItem('pddBizDataLite'); } catch (e2) {}
+                lastMirrorOk = false;
+            }
+        }
+
+        // 落盘总入口：IndexedDB（主）+ localStorage（小数据镜像）
+        function persistData() {
+            let json = '';
+            try { json = JSON.stringify(appData); } catch (e) { json = ''; }
+            idbWriteData(appData);                       // 主存储：容量大，图片多也不怕
+            if (!json) return;
+            if (json.length <= LS_MIRROR_MAX) {
+                try {
+                    localStorage.setItem('pddBizDataPro', json);
+                    localStorage.removeItem('pddBizDataLite');
+                    lastMirrorOk = true;
+                } catch (e) {
+                    // 镜像写不进去不影响主存储：清掉旧兜底副本腾地方
+                    try { localStorage.removeItem('pddBizDataLite'); } catch (e2) {}
+                    lastMirrorOk = false;
+                }
+            } else {
+                mirrorLiteThrottled();                   // 太大：只留无图片副本
+            }
+        }
+
+        // 本机存储状态（管理页显示，让用户看得见「存在哪儿、多大」）
+        function refreshStorageInfo() {
+            const el = document.getElementById('storageInfo');
+            if (!el) return;
+            let size = 0;
+            try { size = JSON.stringify(appData).length; } catch (e) { size = 0; }
+            const imgs = Object.keys(appData.products || {}).filter(k => appData.products[k] && appData.products[k].img);
+            let imgBytes = 0;
+            imgs.forEach(k => { imgBytes += (appData.products[k].img || '').length; });
+            const fmt = (n) => n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : Math.round(n / 1024) + ' KB';
+            const modeTxt = (storageMode === 'idb')
+                ? '✅ 存在 <b>大容量仓库（IndexedDB）</b>，图片再多也不会爆 5MB'
+                : '⚠️ 存在 localStorage（上限 5MB，数据一大就会写不进去）';
+            el.innerHTML = '数据总量：<b>' + fmt(size) + '</b> ｜ 商品图片：<b>' + imgs.length + ' 张</b>（' + fmt(imgBytes) + '）<br>'
+                + modeTxt;
+        }
 
         // keepStamp = true：保留 appData 里已有的 updatedAt，不重新盖章。
         // 从云端接收数据时必须用它 —— 否则会把云端那份的时间戳改成"现在"，
@@ -1478,22 +1633,13 @@
             // 0 库存商品：库存变 0 时开始计时，连续 7 天没库存就自动清理（历史流水保留）
             try { syncZeroSince(); purgeZeroStock(); } catch (e) { console.warn('0库存清理跳过', e); }
 
-            // ⚠️ 写本地必须单独兜住异常：数据带上商品图片（base64）后可能撑到浏览器给本页面的
-            // 存储上限，setItem 抛 QuotaExceededError 时，旧代码会让这一行之后的
-            // updateDashboard / scheduleAutoSync 全部不执行 —— 现象就是「改了数据界面不动、
-            // 云端也永远不更新」。这里出错只提示，绝不阻断后面的渲染与自动同步。
+            // ⚠️ 写本地必须单独兜住异常，绝不阻断后面的渲染与自动同步。
+            // 现在主数据写 IndexedDB（容量大），localStorage 只是小数据镜像 ——
+            // 图片再多也不会再出现「改了数据界面不动、云端也不更新」。
             try {
-                localStorage.setItem('pddBizDataPro', JSON.stringify(appData));
+                persistData();
             } catch (e) {
                 console.warn('本地保存失败', e);
-                // 主存储写满（多为图片撑爆配额）：把去掉图片的轻量版另存一份。
-                // 主数据下次读不到时由 loadData 用它救回流水 —— 改动至少不会因为刷新就没了。
-                try {
-                    const lite = JSON.parse(JSON.stringify(appData));
-                    Object.values(lite.products || {}).forEach(p => { delete p.img; });
-                    localStorage.setItem('pddBizDataLite', JSON.stringify(lite));
-                } catch (e2) {}
-                showSyncWarn('⚠️ 本机存储写不进去了（多为商品图片太多、占满浏览器配额）。这次已把「去掉图片」的数据存进兜底副本，刷新后流水还在；但要彻底解决请先点「备份JSON」存一份，再删掉一些商品图片。');
             }
 
             try { updateDashboard(); } catch (e) { console.warn(e); }
@@ -1534,42 +1680,75 @@
                    (appData.products && Object.keys(appData.products).length > 0);
         }
 
-        function loadData() {
+        // 载入数据：IndexedDB（主存储，容量大）优先 → localStorage 镜像 → 无图片兜底副本
+        async function loadData() {
             let broken = false;
+
+            // ① localStorage 镜像（同步、快，但可能因为 5MB 上限被截断/写不进去）
+            let lsData = null;
             try {
                 const saved = localStorage.getItem('pddBizDataPro');
-                if (saved) appData = JSON.parse(saved);
+                if (saved) lsData = JSON.parse(saved);
             } catch (e) {
-                console.warn('本地数据解析失败，已重置', e);
-                appData = { products: {}, records: [] };
-                // 本地数据已不可信：必须清掉「已同步」留痕，否则会把这份空数据
-                // 当成"未推送的改动"传上云端，把云端的好数据也盖掉
+                console.warn('本地镜像解析失败', e);
                 broken = true;
             }
-            // 主存储读不到（被系统清空 / 写坏 / 配额写满只存了轻量版）时，
-            // 用无图片的兜底副本救回流水和库存 —— 这正是「操作完重开就回到几天前」的主因之一
-            if (!appData || !Array.isArray(appData.records) || !appData.records.length) {
-                try {
-                    const lite = localStorage.getItem('pddBizDataLite');
-                    if (lite) {
-                        const l = JSON.parse(lite);
-                        if (l && ((l.records && l.records.length) || (l.products && Object.keys(l.products).length))) {
-                            appData = l;
-                            setTimeout(() => showToast('⚠️ 本机主存储失效，已从兜底副本恢复（图片丢失，数据还在）'), 1000);
-                        }
-                    }
-                } catch (e) {}
+
+            // ② 无图片兜底副本
+            let liteData = null;
+            try {
+                const lite = localStorage.getItem('pddBizDataLite');
+                if (lite) liteData = JSON.parse(lite);
+            } catch (e) {}
+
+            const hasData = (d) => !!(d && ((Array.isArray(d.records) && d.records.length) ||
+                (d.products && Object.keys(d.products).length) ||
+                (Array.isArray(d.purchases) && d.purchases.length)));
+            const score = (d) => d ? ((Array.isArray(d.records) ? d.records.length : 0) +
+                (d.products ? Object.keys(d.products).length : 0) +
+                (Array.isArray(d.purchases) ? d.purchases.length : 0)) : 0;
+
+            // ③ IndexedDB 主数据
+            let idbData = null;
+            try {
+                idbData = await idbGet('pddData');
+                if (typeof idbData === 'string') { try { idbData = JSON.parse(idbData); } catch (e) { idbData = null; } }
+            } catch (e) { idbData = null; }
+            if (idbData && hasData(idbData)) { idbReady = true; storageMode = 'idb'; }
+
+            // ④ 选哪一份：时间戳更新的优先（这样「删商品」这种改动不会被旧副本还原）；
+            //    时间戳相同再比条数。IDB 没数据时才用镜像，镜像也没有才退兜底副本。
+            let chosen = null;
+            if (hasData(idbData) && hasData(lsData)) {
+                const ti = Number(idbData.updatedAt || 0), tl = Number(lsData.updatedAt || 0);
+                chosen = (ti !== tl) ? (ti > tl ? idbData : lsData) : (score(idbData) >= score(lsData) ? idbData : lsData);
+            } else if (hasData(idbData)) {
+                chosen = idbData;
+            } else if (hasData(lsData)) {
+                chosen = lsData;
+            } else if (hasData(liteData)) {
+                chosen = liteData;
+                setTimeout(() => showToast('⚠️ 本机主存储不完整，已从兜底副本恢复（图片可能丢失，流水还在）'), 1000);
             }
+
+            appData = chosen || { products: {}, records: [] };
+            if (!Array.isArray(appData.records)) appData.records = [];
+            if (!appData.products) appData.products = {};
+
             normalizeAppData();
             const repairedCosts = repairProductCosts();
-            if (repairedCosts > 0) {
-                appData.updatedAt = Date.now();
-                try { localStorage.setItem('pddBizDataPro', JSON.stringify(appData)); } catch (e) {}
-            }
+            if (repairedCosts > 0) appData.updatedAt = Date.now();
             if (!appData.updatedAt) appData.updatedAt = 1;
-            if (broken) {
+
+            // 本地数据彻底不可信（镜像坏了 + IDB 也没数据）：清掉「已同步」留痕，
+            // 否则会把这份空数据当成"未推送的改动"传上云端，把云端好数据盖掉
+            if (broken && !hasData(idbData)) {
                 try { localStorage.removeItem('pddLastSyncAt'); localStorage.removeItem('pddLastSha'); } catch (e) {}
             }
+
+            // ⑤ 把当前数据补齐写进 IndexedDB —— 老用户第一次打开新版就完成迁移
+            idbWriteData(appData);
+            setTimeout(refreshStorageInfo, 800);
         }
 
         function saveFeeRate() {
@@ -2363,6 +2542,7 @@
             const localReal = appData.records.length > 0 && !appData.isSeed;
             if (localReal && appData.updatedAt && cloud.updatedAt && appData.updatedAt !== cloud.updatedAt) {
                 try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e) {}
+                idbSet('pddConflictBackup', appData);   // 数据太大时 localStorage 写不下，这里兜住
             }
             appData = cloud;
             normalizeAppData();
@@ -2460,6 +2640,7 @@
                 const cloud = await fetchCloud();
                 if (cloud.notFound) { setSyncStatus('❌ 云端无数据'); alert('云端还没有数据文件'); return; }
                 try { localStorage.setItem('pddBeforeManualPull', JSON.stringify(appData)); } catch (e) {}
+                idbSet('pddBeforeManualPull', appData);
                 if (!confirm('手动下载会用云端数据覆盖当前设备数据。\n\n已先在本机保存一份临时备份，确定继续吗？')) {
                     setSyncStatus('已取消手动下载');
                     return;
@@ -4562,6 +4743,57 @@
             reader.readAsDataURL(file);
         }
 
+        // 把已有的 base64 图片再压一轮（用于「压缩全部图片」：进云端更快、手机更省空间）
+        function compressDataUrl(dataUrl, maxSize, quality) {
+            return new Promise(function (resolve) {
+                try {
+                    const img = new Image();
+                    img.onload = function () {
+                        try {
+                            let w = img.width, h = img.height;
+                            const scale = Math.min(1, maxSize / Math.max(w, h));
+                            w = Math.max(1, Math.round(w * scale));
+                            h = Math.max(1, Math.round(h * scale));
+                            const c = document.createElement('canvas');
+                            c.width = w; c.height = h;
+                            const ctx = c.getContext('2d');
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, w, h);
+                            ctx.drawImage(img, 0, 0, w, h);
+                            resolve(c.toDataURL('image/jpeg', quality));
+                        } catch (e) { resolve(null); }
+                    };
+                    img.onerror = function () { resolve(null); };
+                    img.src = dataUrl;
+                } catch (e) { resolve(null); }
+            });
+        }
+
+        // 一键把所有商品图片压到 260px：数据变小 → 同步上传更快、手机更省空间
+        async function compressAllImages() {
+            const keys = Object.keys(appData.products || {}).filter(k => appData.products[k] && appData.products[k].img);
+            if (!keys.length) { showToast('目前没有商品图片，不用压缩'); return; }
+            if (!confirm('将把 ' + keys.length + ' 张商品图片重新压到 260px。\n\n好处：数据变小、同步快、手机省空间；\n代价：图片会略微变模糊（库存里认款够用）。\n\n确定继续吗？')) return;
+            let done = 0, saved = 0, failed = 0;
+            showToast('正在压缩 0/' + keys.length + '…');
+            for (const k of keys) {
+                const p = appData.products[k];
+                if (!p || !p.img) { done++; continue; }
+                const old = p.img;
+                const neo = await compressDataUrl(old, 260, 0.6);
+                if (neo && neo.length > 100 && neo.length < old.length) {
+                    p.img = neo;
+                    saved += (old.length - neo.length);
+                } else { failed++; }
+                done++;
+                if (done % 3 === 0) showToast('正在压缩 ' + done + '/' + keys.length + '…');
+            }
+            saveData();
+            renderAllLists();
+            refreshStorageInfo();
+            showToast('✅ 已压缩 ' + (keys.length - failed) + ' 张，省下 ' + Math.round(saved / 1024) + ' KB' + (failed ? '（' + failed + ' 张已足够小，跳过）' : ''));
+        }
+
         function pickProductImage(key) {
             if (!appData.products[key]) return;
             imgTargetKey = key;
@@ -5383,12 +5615,25 @@
         function checkConflictBackup() {
             try {
                 const el = document.getElementById('conflictBackupRow');
-                if (el) el.style.display = localStorage.getItem('pddConflictBackup') ? 'block' : 'none';
+                if (!el) return;
+                let has = false;
+                try { has = !!localStorage.getItem('pddConflictBackup'); } catch (e) {}
+                el.style.display = has ? 'block' : 'none';
+                // 数据超过 5MB 时冲突备份存在 IndexedDB 里，localStorage 是空的
+                if (!has) {
+                    idbGet('pddConflictBackup').then(v => { if (v) el.style.display = 'block'; }).catch(() => {});
+                }
             } catch (e) {}
         }
-        function downloadConflictBackup() {
+        async function downloadConflictBackup() {
             let raw = null;
             try { raw = localStorage.getItem('pddConflictBackup'); } catch (e) {}
+            if (!raw) {
+                try {
+                    const v = await idbGet('pddConflictBackup');
+                    if (v) raw = JSON.stringify(v, null, 2);
+                } catch (e) {}
+            }
             if (!raw) { showToast('没有冲突备份'); return; }
             downloadFile(raw, `冲突备份_${todayStr()}.json`, 'application/json');
             showToast('已导出冲突备份，可用「导入恢复」找回');
@@ -5740,7 +5985,10 @@
                 try { runZeroStockMaintenance(false); } catch (e) {}
                 try { renderStockList(); } catch (e) {}
             }
-            if (tabId === 'manage') { try { runZeroStockMaintenance(false); } catch (e) {} }
+            if (tabId === 'manage') {
+                try { runZeroStockMaintenance(false); } catch (e) {}
+                try { refreshStorageInfo(); } catch (e) {}
+            }
             window.scrollTo(0, 0);
         }
 
