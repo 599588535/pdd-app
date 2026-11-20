@@ -633,6 +633,11 @@
                         <option value="done" data-page-node-id="37GrxotgjobqRjLCQ3PWtL">仅已收货</option>
                         <option value="stocked">📦 已入库（历史查询）</option>
                     </select>
+                    <select id="purSortSel" onchange="renderPurchases()" title="列表排序方式">
+                        <option value="time">🕐 按录入时间</option>
+                        <option value="name">🔤 按商品名称</option>
+                        <option value="account">👤 按下单账号</option>
+                    </select>
                     <button type="button" class="btn btn-outline btn-sm" onclick="markAllArrived()" data-page-node-id="o6nvsweGfwNxemAUyFStLo">✅ 全部标记已收</button>
                     <button type="button" class="btn btn-outline btn-sm" onclick="stockAllArrived()" data-page-node-id="ebQiufDOVHKdvzEcvBc4HK">📦 已收货全部入库</button>
                     <button type="button" class="btn btn-outline btn-sm" id="btnClearStocked" style="display:none;" onclick="clearStockedHistory()">🗑️ 清空入库历史</button>
@@ -1226,7 +1231,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-14 14';
+        const APP_BUILD = '2026-11-20 23';
         const MANUAL_SYNC_ONLY = true;
 
         function getFeeRate() {
@@ -3739,6 +3744,50 @@
         }
 
         function delPurchase(id) {
+            const p = (appData.purchases || []).find(x => String(x.id) === String(id));
+            if (!p) return;
+
+            // 已入库的记录：删除时必须「反向撤销入库」——否则只删采购单、留下入库流水，
+            // 库存就永远多出来了（用户反馈的「个别商品库存不对」主因之一）。
+            // 撤销动作有三步：① 删入库流水 ② 从库存扣回数量 ③ 重算成本均价。
+            if (p.stocked) {
+                const qty = safeNumber(p.qty);
+                if (!confirm('这条记录已经入库了。\n\n删除它会同时：\n① 删掉对应的「入库历史」流水\n② 从库存扣回 ' + fmtQty(qty) + ' 件「' + p.name + '」\n\n确定删除吗？')) return;
+                const prodKey = String(p.name || '').toLowerCase();
+                // 先按 purchaseId 精确定位入库流水
+                let ins = (appData.records || []).filter(r => r && r.type === 'in' &&
+                    r.purchaseId != null && String(r.purchaseId) === String(p.id));
+                // 旧数据兜底：没有 purchaseId 的，按「同名+同数量+同单价」唯一匹配
+                if (!ins.length) {
+                    const cand = (appData.records || []).filter(r => r && r.type === 'in' &&
+                        String(r.name || '').toLowerCase() === prodKey &&
+                        Math.abs(safeNumber(r.qty) - qty) < 0.000001 &&
+                        Math.abs(safeNumber(r.cost) - safeNumber(p.cost)) < 0.000001);
+                    if (cand.length === 1) ins = cand;
+                }
+                // 扣回库存（按每条流水自己的数量，兼容一单拆多条流水的情况）
+                ins.forEach(rec => {
+                    const k = String(rec.name || '').toLowerCase();
+                    if (appData.products[k]) {
+                        appData.products[k].stock = safeNumber(appData.products[k].stock) - safeNumber(rec.qty);
+                    }
+                    markDeleted('records', rec.id);
+                });
+                if (ins.length) {
+                    const rmIds = ins.map(r => String(r.id));
+                    appData.records = (appData.records || []).filter(r => rmIds.indexOf(String(r.id)) < 0);
+                    recalcProductCost(prodKey);
+                }
+                markDeleted('purchases', id);
+                appData.purchases = (appData.purchases || []).filter(x => String(x.id) !== String(id));
+                appData.isSeed = false;
+                saveData();
+                renderAllLists();
+                showToast(ins.length ? ('已删除并撤销入库：库存 -' + fmtQty(qty) + ' 件') : '已删除（未找到对应入库流水，请手动核对库存）');
+                return;
+            }
+
+            // 未入库：只删采购单，不碰库存和流水
             if (!confirm('确定从待收货清单删除吗？')) return;
             markDeleted('purchases', id);
             appData.purchases = (appData.purchases || []).filter(x => String(x.id) !== String(id));
@@ -3920,12 +3969,32 @@
                 }
                 map[k].items.push(p);
             });
-            groups.sort((a, b) => {
-                const ad = a.items.every(p => p.arrived) ? 1 : 0;
-                const bd = b.items.every(p => p.arrived) ? 1 : 0;
-                if (ad !== bd) return ad - bd;
-                return String(b.items[0].createdAt || '').localeCompare(String(a.items[0].createdAt || ''));
-            });
+            // 排序：默认按「未到货优先 + 录入时间」；新增按商品名称 / 下单账号
+            const sortSel = document.getElementById('purSortSel');
+            const sortMode = sortSel ? sortSel.value : 'time';
+            if (sortMode === 'name' || sortMode === 'account') {
+                const key = sortMode === 'name' ? 'name' : 'account';
+                // 中文按拼音、数字按数值比较；空账号/空名称排最后
+                const coll = (typeof Intl !== 'undefined' && Intl.Collator)
+                    ? new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' }) : null;
+                const cmpText = (x, y) => {
+                    const sx = String(x == null ? '' : x).trim();
+                    const sy = String(y == null ? '' : y).trim();
+                    if (!sx && sy) return 1;
+                    if (sx && !sy) return -1;
+                    return coll ? coll.compare(sx, sy) : sx.localeCompare(sy);
+                };
+                // 组内条目按该字段排，分组之间按每组第一条的该字段排
+                groups.forEach(g => g.items.sort((a, b) => cmpText(a[key], b[key])));
+                groups.sort((a, b) => cmpText(a.items[0][key], b.items[0][key]));
+            } else {
+                groups.sort((a, b) => {
+                    const ad = a.items.every(p => p.arrived) ? 1 : 0;
+                    const bd = b.items.every(p => p.arrived) ? 1 : 0;
+                    if (ad !== bd) return ad - bd;
+                    return String(b.items[0].createdAt || '').localeCompare(String(a.items[0].createdAt || ''));
+                });
+            }
 
             box.innerHTML = groups.map(g => {
                 if (g.isSingle) {
