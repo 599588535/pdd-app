@@ -1093,6 +1093,10 @@
                 <div id="conflictBackupRow" style="display:none; margin-top:8px;">
                     <button class="btn btn-outline btn-sm" style="color: var(--warning); border-color: rgba(255,171,64,0.5);" onclick="downloadConflictBackup()">⚠️ 导出冲突备份（同步时被云端覆盖前的本机数据）</button>
                 </div>
+                <div id="beforePullBackupRow" style="display:none; margin-top:8px;">
+                    <button class="btn btn-outline btn-sm" style="color: var(--warning); border-color: rgba(255,171,64,0.5);" onclick="downloadBeforePullBackup()">🛟 导出「下载前备份」（点手动下载前自动留的本机数据）</button>
+                    <button class="btn btn-outline btn-sm" style="color: var(--danger); border-color: rgba(255,23,68,0.4);" onclick="restoreBeforePullBackup()">↩️ 用「下载前备份」恢复本机数据</button>
+                </div>
                 <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(this)" data-page-node-id="CBuxQH2y2EESSbu1JBunVg">
                 <input type="file" id="productImgFile" style="display: none;" accept="image/*" onchange="onProductImgChosen(this)" data-page-node-id="prodImgFile01">
             </div>
@@ -1231,7 +1235,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-20 23';
+        const APP_BUILD = '2026-11-24 22';
         const MANUAL_SYNC_ONLY = true;
 
         function getFeeRate() {
@@ -5693,6 +5697,17 @@
                     idbGet('pddConflictBackup').then(v => { if (v) el.style.display = 'block'; }).catch(() => {});
                 }
             } catch (e) {}
+            // 「手动下载前备份」：同样亮出入口，让被覆盖的本机数据能找回来
+            try {
+                const el2 = document.getElementById('beforePullBackupRow');
+                if (!el2) return;
+                let has2 = false;
+                try { has2 = !!localStorage.getItem('pddBeforeManualPull'); } catch (e) {}
+                el2.style.display = has2 ? 'flex' : 'none';
+                if (!has2) {
+                    idbGet('pddBeforeManualPull').then(v => { if (v) el2.style.display = 'flex'; }).catch(() => {});
+                }
+            } catch (e) {}
         }
         async function downloadConflictBackup() {
             let raw = null;
@@ -5706,6 +5721,55 @@
             if (!raw) { showToast('没有冲突备份'); return; }
             downloadFile(raw, `冲突备份_${todayStr()}.json`, 'application/json');
             showToast('已导出冲突备份，可用「导入恢复」找回');
+        }
+
+        // 读取「手动下载前备份」：localStorage 优先（小数据），大数据在 IndexedDB
+        async function readBeforePullBackup() {
+            let raw = null;
+            try { raw = localStorage.getItem('pddBeforeManualPull'); } catch (e) {}
+            if (raw) { try { return JSON.parse(raw); } catch (e) {} }
+            try {
+                const v = await idbGet('pddBeforeManualPull');
+                if (v) return (typeof v === 'string') ? JSON.parse(v) : v;
+            } catch (e) {}
+            return null;
+        }
+
+        async function downloadBeforePullBackup() {
+            const data = await readBeforePullBackup();
+            if (!data) { showToast('没有下载前备份'); return; }
+            downloadFile(JSON.stringify(data, null, 2), `下载前备份_${todayStr()}.json`, 'application/json');
+            showToast('已导出下载前备份，可用「导入恢复」找回');
+        }
+
+        // 直接用「下载前备份」覆盖当前数据（覆盖前先把当前数据存成冲突备份，留后路）
+        async function restoreBeforePullBackup() {
+            const data = await readBeforePullBackup();
+            if (!data || !Array.isArray(data.records)) { showToast('没有可用的下载前备份'); return; }
+            const recN = (data.records || []).length;
+            const prodN = Object.keys(data.products || {}).length;
+            if (!confirm('用「下载前备份」覆盖当前数据吗？\n\n' +
+                '备份里有：' + prodN + ' 个商品、' + recN + ' 条流水\n' +
+                '当前数据会先存成一份冲突备份（可在上方导出），然后被这份备份替换。\n\n确定恢复吗？')) return;
+            // 留后路：把当前数据存进冲突备份
+            try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e) {}
+            try { await idbSet('pddConflictBackup', appData); } catch (e) {}
+            appData = data;
+            normalizeAppData();
+            appData.isSeed = false;
+            appData.updatedAt = Date.now();
+            saveData();
+            try { localStorage.setItem('pddDirty', '1'); } catch (e) {}  // 标记为待推送，让云端也同步回这份
+            lastSyncElReset();
+            renderAllLists();
+            showToast('已恢复：' + prodN + ' 个商品、' + recN + ' 条流水（记得点上传同步到云端）');
+        }
+
+        // 恢复本地数据后，清掉「已同步」的基准，避免被当成已同步而不推送
+        function lastSyncElReset() {
+            try { localStorage.removeItem('pddLastSyncAt'); localStorage.removeItem('pddLastSha'); } catch (e) {}
+            lastCloudSha = null;
+            lastCloudUpdatedAt = null;
         }
 
         function clearAllData() {
