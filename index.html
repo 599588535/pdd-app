@@ -510,6 +510,7 @@
                     </button>
                 </div>
                 <div class="msync-status" id="mSyncStatus" data-page-node-id="mSyncCard11">💡 手动同步：改完数据点「上传数据」；换手机前先点「下载数据」（重复下载不会丢本机记录）</div>
+                <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px; width:100%; color: var(--danger); border-color: rgba(255,23,68,0.4);" onclick="forcePushToGithub()">⚠️ 强制覆盖云端（以本机为准，不合并旧数据）</button>
             </div>
 
             <div class="card" data-page-node-id="6jhSTXtnV6CtQeHIXL1MUk">
@@ -1044,6 +1045,7 @@
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="saveGithubConfig()" data-page-node-id="QUjtDiWoLHZxFbaW2NwLzV">💾 保存配置</button>
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="pushToGithub()" data-page-node-id="PeHXFIT3HdT6LycCnnmYqx">⬆️ 推送到云端</button>
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="pullFromGithub()" data-page-node-id="uZtD5mm8Wu78jUlOOGyKGS">⬇️ 从云端拉取</button>
+                    <button class="btn btn-outline btn-sm" style="margin-top: 0; color: var(--danger); border-color: rgba(255,23,68,0.4);" onclick="forcePushToGithub()" title="以本机数据整包覆盖云端，不合并另一台的记录">⚠️ 强制覆盖云端</button>
                     <button class="btn btn-outline btn-sm" style="margin-top: 0;" onclick="testCloudChannels()" data-page-node-id="cfDiagBtn1">🔌 云端连通测试</button>
                 </div>
                 <div class="sync-status" id="syncStatus" data-page-node-id="34szYHwI6lvP1lCX8XUV2I">未同步</div>
@@ -1235,7 +1237,7 @@
         const FILE_NAME = 'pdd_biz_data.json';
 
         /* ==================== 版本与更新自检（新增） ==================== */
-        const APP_BUILD = '2026-11-24 22';
+        const APP_BUILD = '2026-11-24 23';
         const MANUAL_SYNC_ONLY = true;
 
         function getFeeRate() {
@@ -2451,6 +2453,34 @@
             if (!syncConfigured()) { showToast('请先填写并保存 GitHub 配置'); return; }
             setSyncStatus('正在推送...');
             uploadData(false);
+        }
+
+        // 强制覆盖云端：以「当前设备数据」为准整包覆盖云端，跳过「合并另一台设备记录」。
+        // 用途：恢复旧备份后、发现云端混进了错乱数据想重置、或明确知道另一台的旧数据不该并回来。
+        // 覆盖前自动留一份冲突备份到本机，误操作还能从「管理 → 本地备份」导出找回。
+        async function forcePushToGithub() {
+            if (!syncConfigured()) { showToast('请先填写并保存 GitHub 配置'); return; }
+            const recN = (appData.records || []).length;
+            const prodN = Object.keys(appData.products || {}).length;
+            if (!confirm('⚠️ 强制覆盖云端（不会合并另一台设备的记录）\n\n' +
+                '将用「当前设备的数据」整包覆盖云端：\n' +
+                '　本机：' + prodN + ' 个商品、' + recN + ' 条流水\n\n' +
+                '覆盖后，另一台设备还没同步上来的记录会丢失。\n' +
+                '覆盖前会自动在本机留一份冲突备份（管理页可导出）。\n\n' +
+                '确定覆盖吗？')) return;
+            // 留后路：把当前数据存进冲突备份
+            try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e) {}
+            try { await idbSet('pddConflictBackup', appData); } catch (e) {}
+            appData._clearAllPending = true;   // 告诉 uploadData：这次跳过合并，整包覆盖
+            appData.updatedAt = Date.now();
+            try { localStorage.setItem('pddDirty', '1'); } catch (e) {}
+            saveData();
+            setSyncStatus('正在强制覆盖云端...');
+            const ok = await uploadData(false);
+            if (ok) {
+                setSyncStatus('✅ 已用本机数据覆盖云端（未合并旧数据）' + new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+                showToast('✅ 已覆盖云端：另一台设备下次下载会拿到这份数据');
+            }
         }
 
         // 依次尝试各条通道，谁先成功用谁；全部失败时把每条通道的结果汇总抛出来，便于定位
@@ -5669,13 +5699,29 @@
                 try {
                     const json = JSON.parse(e.target.result);
                     if (json.products && json.records) {
+                        // 留后路：恢复前把当前数据存成冲突备份，恢复错了还能捞回来
+                        try { localStorage.setItem('pddConflictBackup', JSON.stringify(appData)); } catch (e2) {}
+                        idbSet('pddConflictBackup', appData);
+                        const recN = (json.records || []).length;
+                        const prodN = Object.keys(json.products || {}).length;
+                        if (!confirm('用这份备份覆盖当前数据吗？\n\n' +
+                            '备份里有：' + prodN + ' 个商品、' + recN + ' 条流水\n' +
+                            '当前数据会先存成冲突备份（管理页可导出），然后被这份备份替换。\n\n' +
+                            '⚠️ 恢复后点「上传数据」会用这份数据整包覆盖云端，不会合并旧数据。\n\n确定恢复吗？')) return;
                         appData = json;
                         normalizeAppData();
                         repairProductCosts();
                         appData.isSeed = false;
+                        appData.updatedAt = Date.now();
+                        // 🔑 关键：恢复备份是「以本机为准」的明确操作。
+                        // 打上这个标记后，下一次上传会跳过「合并另一台设备记录」，整包覆盖云端 ——
+                        // 否则程序会把云端那份旧数据当成"另一台的新记录"合并回来，越恢复越乱。
+                        appData._clearAllPending = true;
+                        try { localStorage.setItem('pddDirty', '1'); } catch (e2) {}
+                        lastSyncElReset();   // 清掉旧指纹，避免上传时误判"云端变了"
                         localStorage.setItem('pddSeeded', '1');
                         saveData();
-                        alert('恢复成功！');
+                        alert('恢复成功！\n\n请点一次「上传数据」，会用这份数据覆盖云端（不会合并旧数据）。');
                         location.reload();
                     } else { alert('文件格式不正确'); }
                 } catch (err) { alert('文件解析失败'); }
@@ -5758,11 +5804,13 @@
             normalizeAppData();
             appData.isSeed = false;
             appData.updatedAt = Date.now();
+            // 🔑 恢复 = 以本机为准：下一次上传整包覆盖云端，不合并旧数据
+            appData._clearAllPending = true;
             saveData();
             try { localStorage.setItem('pddDirty', '1'); } catch (e) {}  // 标记为待推送，让云端也同步回这份
             lastSyncElReset();
             renderAllLists();
-            showToast('已恢复：' + prodN + ' 个商品、' + recN + ' 条流水（记得点上传同步到云端）');
+            showToast('已恢复：' + prodN + ' 个商品、' + recN + ' 条流水（点上传会用这份覆盖云端，不合并）');
         }
 
         // 恢复本地数据后，清掉「已同步」的基准，避免被当成已同步而不推送
@@ -5770,6 +5818,7 @@
             try { localStorage.removeItem('pddLastSyncAt'); localStorage.removeItem('pddLastSha'); } catch (e) {}
             lastCloudSha = null;
             lastCloudUpdatedAt = null;
+            cachedSha = null;   // 内存里的旧指纹也要清，否则强制覆盖那次仍可能拿旧 sha 去比对
         }
 
         function clearAllData() {
